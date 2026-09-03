@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"antiapi/transport"
 )
 
 type Account struct {
@@ -83,6 +85,23 @@ func (a *Account) IsAvailable() bool {
 	defer a.mu.RUnlock()
 	now := time.Now()
 	return !now.Before(a.RateLimitedUntil) && !now.Before(a.QuarantinedUntil)
+}
+
+// HasHealthyQuota returns false if known remaining quota for any tier is dangerously low (< 5%)
+func (a *Account) HasHealthyQuota() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if a.LastQuotaSummary == nil {
+		return true // No data yet, assume available
+	}
+	for _, g := range a.LastQuotaSummary.Groups {
+		for _, b := range g.Buckets {
+			if b.RemainingFraction > 0 && b.RemainingFraction < 0.05 {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (a *Account) ClearRateLimit() {
@@ -215,11 +234,9 @@ func (a *Account) resolveProjectID() {
 		},
 	})
 	req, _ := http.NewRequest("POST", ProjectURL, bytes.NewBuffer(reqBody))
-	req.Header.Set("Authorization", "Bearer "+a.AccessToken)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "antigravity/hub/2.9.1 linux/x64")
+	transport.SetStandardHeaders(req, a.AccessToken)
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := transport.NewClient(10 * time.Second)
 	resp, err := client.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		return
@@ -457,14 +474,21 @@ func (p *AccountPool) NextAvailableAccount() (*Account, error) {
 		return nil, fmt.Errorf("no accounts in pool")
 	}
 
-	// Priority-based order: check accounts sequentially from index 0 (top) downwards
+	// Priority 1: Check accounts that are available AND have healthy remaining quota (> 5%)
+	for _, acc := range p.accounts {
+		if acc.IsAvailable() && acc.HasHealthyQuota() {
+			return acc, nil
+		}
+	}
+
+	// Priority 2: Fallback to any available account (even if low quota)
 	for _, acc := range p.accounts {
 		if acc.IsAvailable() {
 			return acc, nil
 		}
 	}
 
-	// All accounts are rate-limited or quarantined; find the one with the earliest reset
+	// Priority 3: All accounts in cooldown; find the one with the earliest reset
 	var bestAcc *Account
 	var earliest time.Time
 	for _, acc := range p.accounts {
@@ -567,14 +591,12 @@ func (a *Account) FetchQuotaSummary() (*UserQuotaSummary, error) {
 		"https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := transport.NewClient(10 * time.Second)
 	var lastErr error
 
 	for _, ep := range endpoints {
 		req, _ := http.NewRequest("POST", ep, bytes.NewBuffer(reqData))
-		req.Header.Set("Authorization", "Bearer "+token)
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("User-Agent", "antigravity/hub/2.9.1 darwin/arm64")
+		transport.SetStandardHeaders(req, token)
 
 		resp, err := client.Do(req)
 		if err != nil {

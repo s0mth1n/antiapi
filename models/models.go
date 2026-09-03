@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"antiapi/auth"
+	"antiapi/transport"
 )
 
 const (
 	CloudCodeBaseURL = "https://daily-cloudcode-pa.googleapis.com"
 	FallbackBaseURL  = "https://cloudcode-pa.googleapis.com"
-	UserAgent        = "antigravity/hub/2.9.1 darwin/arm64"
 )
 
 type ModelQuota struct {
@@ -95,10 +95,8 @@ func (r *Registry) FetchLiveModels() error {
 
 	makeReq := func(baseURL string) (*http.Response, error) {
 		req, _ := http.NewRequest("POST", baseURL+"/v1internal:fetchAvailableModels", bytes.NewBuffer(reqData))
-		req.Header.Set("Authorization", "Bearer "+token)
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("User-Agent", UserAgent)
-		client := &http.Client{Timeout: 10 * time.Second}
+		transport.SetStandardHeaders(req, token)
+		client := transport.NewClient(10 * time.Second)
 		return client.Do(req)
 	}
 

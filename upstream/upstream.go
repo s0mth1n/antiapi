@@ -9,7 +9,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -23,14 +22,6 @@ const (
 	StreamPath       = "/v1internal:streamGenerateContent?alt=sse"
 	RequestTimeout   = 120 * time.Second
 )
-
-// BuildUserAgent dynamically generates a platform-matching user agent.
-func BuildUserAgent() string {
-	if custom := os.Getenv("ANTIGRAVITY_USER_AGENT"); custom != "" {
-		return custom
-	}
-	return fmt.Sprintf("antigravity/hub/2.9.1 %s/%s", runtime.GOOS, runtime.GOARCH)
-}
 
 type SSEEvent struct {
 	Data []byte

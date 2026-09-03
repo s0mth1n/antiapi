@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"antiapi/transport"
 )
 
 const (
@@ -191,11 +193,9 @@ func (tm *TokenManager) resolveProjectID(token string) {
 		},
 	})
 	req, _ := http.NewRequest("POST", ProjectURL, bytes.NewBuffer(reqBody))
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "antigravity/hub/2.9.1 linux/x64")
+	transport.SetStandardHeaders(req, token)
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := transport.NewClient(10 * time.Second)
 	resp, err := client.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		return

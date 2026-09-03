@@ -20,22 +20,32 @@ import (
 	"antiapi/web"
 )
 
-func applyMicroJitter() {
-	jitterMaxMs := 40
+func applyAdaptiveJitter(payloadLen int) {
+	baseJitter := 35
 	if envVal := os.Getenv("ANTIAPI_JITTER_MS"); envVal != "" {
 		if parsed, err := strconv.Atoi(envVal); err == nil && parsed >= 0 {
-			jitterMaxMs = parsed
+			baseJitter = parsed
 		}
 	}
-	if jitterMaxMs > 0 {
-		minMs := 10
-		if jitterMaxMs <= minMs {
-			time.Sleep(time.Duration(jitterMaxMs) * time.Millisecond)
-			return
-		}
-		sleepMs := minMs + rand.Intn(jitterMaxMs-minMs)
-		time.Sleep(time.Duration(sleepMs) * time.Millisecond)
+	if baseJitter <= 0 {
+		return
 	}
+
+	extraMs := 0
+	if payloadLen > 50000 {
+		extraMs = 80 + rand.Intn(120)
+	} else if payloadLen > 10000 {
+		extraMs = 30 + rand.Intn(50)
+	}
+
+	minMs := 10
+	maxMs := baseJitter + extraMs
+	if maxMs <= minMs {
+		time.Sleep(time.Duration(maxMs) * time.Millisecond)
+		return
+	}
+	sleepMs := minMs + rand.Intn(maxMs-minMs)
+	time.Sleep(time.Duration(sleepMs) * time.Millisecond)
 }
 
 type Server struct {
@@ -329,13 +339,13 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	applyMicroJitter()
-
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Failed to read body", http.StatusBadRequest)
 		return
 	}
+
+	applyAdaptiveJitter(len(bodyBytes))
 
 	var req translator.OpenAIChatRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
@@ -409,13 +419,13 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	applyMicroJitter()
-
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Failed to read body", http.StatusBadRequest)
 		return
 	}
+
+	applyAdaptiveJitter(len(bodyBytes))
 
 	var req translator.ClaudeRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
