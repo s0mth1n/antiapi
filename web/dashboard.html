@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AntiAPI — Antigravity Gateway</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #06080d;
+      --bg-surface: #0c1018;
+      --bg-card: #080b11;
+      --bg-input: #05070a;
+      --border-subtle: rgba(255, 255, 255, 0.06);
+      --border-focus: rgba(99, 102, 241, 0.45);
+      --border-highlight: rgba(255, 255, 255, 0.12);
+
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --primary-glow: rgba(99, 102, 241, 0.22);
+
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-faint: #64748b;
+
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-xl: 20px;
+
+      --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.6), 0 0 1px 1px var(--border-subtle);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      line-height: 1.5;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 10% 0%, rgba(99, 102, 241, 0.1) 0%, transparent 40%),
+        radial-gradient(circle at 90% 100%, rgba(6, 182, 212, 0.06) 0%, transparent 40%),
+        linear-gradient(180deg, rgba(6, 8, 13, 0.9) 0%, rgba(6, 8, 13, 1) 100%);
+      background-attachment: fixed;
+    }
+
+    /* Top Navigation */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(6, 8, 13, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 0.75rem clamp(1rem, 4vw, 2.5rem);
+    }
+
+    .header-inner {
+      max-width: 980px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1.25rem;
+      flex-wrap: wrap;
+    }
+
+    .brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .brand-logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #6366f1 0%, #06b6d4 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      color: #fff;
+      font-size: 1.15rem;
+      box-shadow: 0 0 16px var(--primary-glow);
+    }
+
+    .brand-text {
+      font-size: 1.15rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+
+    .version-tag {
+      font-size: 0.65rem;
+      font-family: var(--font-mono);
+      padding: 0.15rem 0.45rem;
+      border-radius: 9999px;
+      background: rgba(99, 102, 241, 0.15);
+      color: #818cf8;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+
+    /* Navigation Tabs */
+    .nav-tabs {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 0.25rem;
+      border-radius: 9999px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .tab-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.4rem 0.95rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .tab-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .tab-btn.active {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 0 14px var(--primary-glow);
+    }
+
+    .header-pills {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.3rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+    }
+
+    /* Main Container */
+    main {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 1.75rem clamp(1rem, 3vw, 2rem);
+    }
+
+    /* Page Switcher Animation */
+    .page-section {
+      display: none;
+      animation: fadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .page-section.active {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Clean Card Container */
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-xl);
+      padding: clamp(1.25rem, 3vw, 1.75rem);
+      box-shadow: var(--shadow-card);
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .card-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+
+    .page-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .page-subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 0.2rem;
+    }
+
+    /* 1. LIMITS PAGE */
+    .account-switcher-pills {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+    }
+
+    .acc-switcher-btn {
+      padding: 0.3rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .acc-switcher-btn:hover {
+      border-color: var(--border-highlight);
+      color: #fff;
+    }
+
+    .acc-switcher-btn.active {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: rgba(99, 102, 241, 0.5);
+      color: #818cf8;
+      box-shadow: 0 0 12px rgba(99, 102, 241, 0.2);
+    }
+
+    .limits-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .category-title {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: #e2e8f0;
+      margin-bottom: 0.65rem;
+    }
+
+    .limit-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.2rem;
+    }
+
+    .limit-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .limit-text {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      flex: 1;
+    }
+
+    .limit-name {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #f1f5f9;
+    }
+
+    .limit-desc {
+      font-size: 0.76rem;
+      color: #94a3b8;
+      line-height: 1.35;
+    }
+
+    .limit-gauge {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-shrink: 0;
+    }
+
+    .pct-label {
+      font-size: 1.15rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      color: #f8fafc;
+      min-width: 44px;
+      text-align: right;
+    }
+
+    .circle-gauge {
+      width: 36px;
+      height: 36px;
+      transform: rotate(-90deg);
+    }
+
+    .circle-bg {
+      fill: none;
+      stroke: #1e293b;
+      stroke-width: 3.8;
+    }
+
+    .circle-fg {
+      fill: none;
+      stroke-width: 3.8;
+      stroke-linecap: round;
+      transition: stroke-dasharray 0.5s ease;
+    }
+
+    /* 2. MODELS & TEST PAGE */
+    .models-test-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+
+    .model-test-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.95rem 1.25rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      gap: 1rem;
+      transition: border-color 0.2s;
+    }
+
+    .model-test-card:hover {
+      border-color: var(--border-highlight);
+    }
+
+    .model-info-col {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      flex: 1;
+    }
+
+    .model-name-text {
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .model-id-text {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-faint);
+    }
+
+    .model-tier-badge {
+      display: inline-block;
+      padding: 0.18rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+    }
+
+    .tier-claude { background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .tier-gemini { background: rgba(6, 182, 212, 0.12); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); }
+    .tier-pro { background: rgba(168, 85, 247, 0.12); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+    .tier-gpt { background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+
+    .model-status-col {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+
+    .test-result-badge {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      min-width: 90px;
+      text-align: right;
+    }
+
+    .test-result-badge.ok { color: #34d399; }
+    .test-result-badge.err { color: #fb7185; }
+    .test-result-badge.testing { color: #818cf8; animation: pulse 1s infinite; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* 3. ACCOUNTS PAGE */
+    .priority-banner {
+      background: rgba(99, 102, 241, 0.08);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      border-radius: var(--radius-md);
+      padding: 0.75rem 1rem;
+      font-size: 0.8rem;
+      color: #c7d2fe;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      line-height: 1.4;
+    }
+
+    .account-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+
+    .account-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.95rem 1.25rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      gap: 1rem;
+      cursor: grab;
+      user-select: none;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .account-card:active { cursor: grabbing; }
+
+    .account-card.dragging {
+      opacity: 0.45;
+      transform: scale(0.98);
+      border-color: var(--primary) !important;
+      box-shadow: 0 10px 25px var(--primary-glow);
+    }
+
+    .account-main-info {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      flex: 1;
+    }
+
+    .drag-handle {
+      color: #64748b;
+      font-size: 1.15rem;
+      display: flex;
+      align-items: center;
+      cursor: grab;
+      transition: color 0.2s;
+    }
+
+    .account-card:hover .drag-handle { color: #cbd5e1; }
+
+    .avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #1e293b, #0f172a);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: #cbd5e1;
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+
+    .account-text-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .account-email-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .email-title {
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+
+    .meta-subtitle {
+      font-size: 0.74rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+
+    .priority-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 9999px;
+      font-size: 0.68rem;
+      font-weight: 700;
+    }
+
+    .priority-badge.primary {
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.45);
+      color: #a5b4fc;
+    }
+
+    .priority-badge.fallback {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #94a3b8;
+    }
+
+    .add-token-row {
+      display: flex;
+      gap: 0.6rem;
+      margin-top: 0.4rem;
+    }
+
+    .token-input {
+      flex: 1;
+      padding: 0.7rem 0.95rem;
+      border-radius: var(--radius-md);
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      outline: none;
+    }
+
+    .token-input:focus {
+      border-color: var(--border-focus);
+    }
+
+    /* 4. INTEGRATION PAGE */
+    .tab-pills {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+    }
+
+    .chip {
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .chip:hover {
+      border-color: var(--border-highlight);
+      color: #fff;
+    }
+
+    .chip.active {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: rgba(99, 102, 241, 0.5);
+      color: #818cf8;
+    }
+
+    .code-container {
+      position: relative;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+
+    .code-content {
+      padding: 1.15rem;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      color: #e2e8f0;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      overflow-x: auto;
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 0.75rem;
+      right: 0.75rem;
+      padding: 0.35rem 0.75rem;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+    }
+
+    /* Common Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      padding: 0.5rem 0.95rem;
+      border-radius: var(--radius-md);
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 4px 14px var(--primary-glow);
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .btn-test {
+      background: rgba(99, 102, 241, 0.12);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      color: #a5b4fc;
+      padding: 0.35rem 0.75rem;
+      font-size: 0.75rem;
+    }
+
+    .btn-test:hover {
+      background: rgba(99, 102, 241, 0.25);
+      color: #fff;
+    }
+
+    .btn-danger {
+      background: rgba(244, 63, 94, 0.1);
+      border: 1px solid rgba(244, 63, 94, 0.2);
+      color: #fb7185;
+      padding: 0.35rem 0.75rem;
+      font-size: 0.75rem;
+    }
+
+    .btn-danger:hover {
+      background: rgba(244, 63, 94, 0.2);
+    }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: #1e293b;
+      color: #fff;
+      padding: 0.75rem 1.25rem;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      font-size: 0.82rem;
+      font-weight: 600;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 16px var(--primary-glow);
+      transform: translateY(80px);
+      opacity: 0;
+      transition: all 0.25s ease;
+      z-index: 1000;
+    }
+
+    #toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Clean Top Header with Tabbed Pages -->
+  <header>
+    <div class="header-inner">
+      <div class="brand-wrap">
+        <div class="brand-logo">α</div>
+        <div class="brand-text">
+          <span>AntiAPI</span>
+          <span class="version-tag">v2.0</span>
+        </div>
+      </div>
+
+      <!-- Multiple Pages Navigation -->
+      <nav class="nav-tabs">
+        <button class="tab-btn active" onclick="switchPage('limits')" id="btn-tab-limits">📊 Limits</button>
+        <button class="tab-btn" onclick="switchPage('models')" id="btn-tab-models">🧠 Models & Test</button>
+        <button class="tab-btn" onclick="switchPage('accounts')" id="btn-tab-accounts">👥 Accounts</button>
+        <button class="tab-btn" onclick="switchPage('integration')" id="btn-tab-integration">🔌 Integration</button>
+      </nav>
+
+      <div class="header-pills">
+        <div class="pill">
+          <span class="status-dot"></span>
+          <span id="header-latency">Gateway Live</span>
+        </div>
+        <div class="pill" id="header-acc-count">
+          2 Accounts Active
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- PAGE 1: OFFICIAL LIMITS -->
+    <div class="page-section active" id="page-limits">
+      <section class="card">
+        <div class="card-header-row">
+          <div>
+            <div class="page-title">Official Antigravity Rate Limits</div>
+            <div class="page-subtitle">Direct live sync via Google Cloud Code PA</div>
+          </div>
+          <div class="account-switcher-pills" id="quota-account-pills">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <div class="limits-grid" id="quota-limits-container">
+          <div style="color: var(--text-muted); padding: 1.25rem; background: #080b11; border-radius: 12px; font-size: 0.85rem;">
+            Fetching live Google Cloud Code quota summary...
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- PAGE 2: CURATED MODELS & TEST -->
+    <div class="page-section" id="page-models">
+      <section class="card">
+        <div class="card-header-row">
+          <div>
+            <div class="page-title">Curated Models & Health Verification</div>
+            <div class="page-subtitle">8 production models • Click to ping and verify reachability</div>
+          </div>
+          <button class="btn btn-primary" onclick="testAllModels()">⚡ Test All Models</button>
+        </div>
+
+        <div class="models-test-grid" id="models-test-list">
+          <!-- Rendered dynamically -->
+        </div>
+      </section>
+    </div>
+
+    <!-- PAGE 3: ACCOUNTS POOL & PRIORITY -->
+    <div class="page-section" id="page-accounts">
+      <section class="card">
+        <div class="card-header-row">
+          <div>
+            <div class="page-title">Google Account Pool (<span id="pool-count">2</span>)</div>
+            <div class="page-subtitle">Drag cards to set priority order. Priority 1 is used first.</div>
+          </div>
+          <button class="btn btn-primary" onclick="window.open('/oauth/login', '_blank')">+ Add via Google</button>
+        </div>
+
+        <div class="priority-banner">
+          <span>💡</span>
+          <div>
+            <strong>Automatic Priority Failover:</strong> All requests go to Priority 1. If it hits limits or 429 quota exhaustion, traffic automatically switches to the next account.
+          </div>
+        </div>
+
+        <div class="account-list" id="accounts-container">
+          <!-- Reorderable accounts rendered here -->
+        </div>
+
+        <div class="add-token-row">
+          <input type="password" id="token-input" class="token-input" placeholder="Paste Google Refresh Token (1//...)" />
+          <button class="btn btn-secondary" onclick="addToken()">Add Token</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- PAGE 4: CLIENT INTEGRATION -->
+    <div class="page-section" id="page-integration">
+      <section class="card">
+        <div>
+          <div class="page-title">Client Integration & Settings</div>
+          <div class="page-subtitle">Configure Hermes Agent, Cursor, Windsurf, or Python OpenAI SDK</div>
+        </div>
+
+        <div class="tab-pills" id="integration-tabs">
+          <span class="chip active" onclick="showSnippet('hermes')">Hermes Agent</span>
+          <span class="chip" onclick="showSnippet('cursor')">Cursor / Windsurf</span>
+          <span class="chip" onclick="showSnippet('python')">Python OpenAI SDK</span>
+          <span class="chip" onclick="showSnippet('curl')">cURL</span>
+        </div>
+
+        <div class="code-container">
+          <button class="copy-btn" onclick="copySnippet()">Copy</button>
+          <pre class="code-content" id="snippet-display"></pre>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div id="toast">✓ Done</div>
+
+  <script>
+    let activePage = 'limits';
+    let allQuotaSummaries = {};
+    let activeQuotaAccount = '';
+
+    function switchPage(pageId) {
+      activePage = pageId;
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      const activeBtn = document.getElementById(`btn-tab-${pageId}`);
+      if (activeBtn) activeBtn.classList.add('active');
+
+      document.querySelectorAll('.page-section').forEach(sec => sec.classList.remove('active'));
+      const activeSec = document.getElementById(`page-${pageId}`);
+      if (activeSec) activeSec.classList.add('active');
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.innerText = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    // 1. Quota Switcher & Render
+    function switchQuotaAccount(email) {
+      activeQuotaAccount = email;
+      document.querySelectorAll('.acc-switcher-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.email === email);
+      });
+      renderLimits(allQuotaSummaries[email]);
+    }
+
+    function renderLimits(summary) {
+      const container = document.getElementById('quota-limits-container');
+      if (!summary || !summary.groups || summary.groups.length === 0) {
+        container.innerHTML = '<div style="color: var(--text-muted); padding: 1rem; font-size: 0.85rem;">No quota summary available.</div>';
+        return;
+      }
+
+      container.innerHTML = '';
+
+      summary.groups.forEach(group => {
+        const block = document.createElement('div');
+
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'category-title';
+        titleDiv.innerHTML = `<span>${group.displayName}</span> <span class="info-icon" title="${group.description || ''}">ⓘ</span>`;
+        block.appendChild(titleDiv);
+
+        const card = document.createElement('div');
+        card.className = 'limit-box';
+
+        (group.buckets || []).forEach(bucket => {
+          const row = document.createElement('div');
+          row.className = 'limit-row';
+
+          const pct = Math.round(bucket.remainingFraction * 100);
+          const clamped = Math.max(0, Math.min(100, pct));
+
+          let strokeColor = '#4ade80';
+          if (clamped < 25) strokeColor = '#f43f5e';
+          else if (clamped < 60) strokeColor = '#f59e0b';
+
+          row.innerHTML = `
+            <div class="limit-text">
+              <div class="limit-name">${bucket.displayName}</div>
+              <div class="limit-desc">${bucket.description}</div>
+            </div>
+            <div class="limit-gauge">
+              <span class="pct-label">${pct}%</span>
+              <svg class="circle-gauge" viewBox="0 0 36 36">
+                <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path class="circle-fg" stroke="${strokeColor}" stroke-dasharray="${clamped}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              </svg>
+            </div>
+          `;
+          card.appendChild(row);
+        });
+
+        block.appendChild(card);
+        container.appendChild(block);
+      });
+    }
+
+    async function loadStatus() {
+      try {
+        const start = performance.now();
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        const latency = Math.round(performance.now() - start);
+
+        document.getElementById('header-latency').innerText = `Gateway Live (${latency}ms)`;
+
+        if (data.quota_summaries) {
+          allQuotaSummaries = data.quota_summaries;
+          const emails = Object.keys(allQuotaSummaries);
+          if (!activeQuotaAccount || !allQuotaSummaries[activeQuotaAccount]) {
+            activeQuotaAccount = data.selected_account || emails[0] || '';
+          }
+
+          const switcher = document.getElementById('quota-account-pills');
+          switcher.innerHTML = '';
+          emails.forEach(email => {
+            const btn = document.createElement('button');
+            btn.className = 'acc-switcher-btn' + (email === activeQuotaAccount ? ' active' : '');
+            btn.dataset.email = email;
+            btn.innerText = email;
+            btn.onclick = () => switchQuotaAccount(email);
+            switcher.appendChild(btn);
+          });
+
+          renderLimits(allQuotaSummaries[activeQuotaAccount]);
+        }
+
+        const total = data.total || (data.accounts ? data.accounts.length : 1);
+        document.getElementById('header-acc-count').innerText = `${total} Account${total > 1 ? 's' : ''} Active`;
+        document.getElementById('pool-count').innerText = total;
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // 2. Curated Models & Test Runner
+    const modelsList = [
+      { id: "gemini-3.8-flash-high", name: "Gemini 3.8 Flash (High)", tier: "Gemini Flash", tierClass: "tier-gemini" },
+      { id: "gemini-3.7-flash-high", name: "Gemini 3.7 Flash (High)", tier: "Gemini Flash", tierClass: "tier-gemini" },
+      { id: "gemini-3.7-flash-medium", name: "Gemini 3.7 Flash (Medium)", tier: "Gemini Flash", tierClass: "tier-gemini" },
+      { id: "gemini-3.6-flash-medium", name: "Gemini 3.6 Flash (Medium)", tier: "Gemini Flash", tierClass: "tier-gemini" },
+      { id: "gemini-3.1-pro-high", name: "Gemini 3.1 Pro (High)", tier: "Gemini Pro", tierClass: "tier-pro" },
+      { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", tier: "Claude", tierClass: "tier-claude" },
+      { id: "claude-opus-4-6-thinking", name: "Claude Opus 4.6 (Thinking)", tier: "Claude", tierClass: "tier-claude" },
+      { id: "gpt-oss-120b-medium", name: "GPT-OSS 120B (Medium)", tier: "GPT", tierClass: "tier-gpt" }
+    ];
+
+    function renderModelsTestList() {
+      const container = document.getElementById('models-test-list');
+      container.innerHTML = '';
+
+      modelsList.forEach(m => {
+        const card = document.createElement('div');
+        card.className = 'model-test-card';
+        card.id = `model-card-${m.id}`;
+
+        card.innerHTML = `
+          <div class="model-info-col">
+            <span class="model-tier-badge ${m.tierClass}">${m.tier}</span>
+            <div>
+              <div class="model-name-text">${m.name}</div>
+              <div class="model-id-text">${m.id}</div>
+            </div>
+          </div>
+          <div class="model-status-col">
+            <span class="test-result-badge" id="status-${m.id}">Ready</span>
+            <button class="btn btn-test" id="btn-test-${m.id}" onclick="testSingleModel('${m.id}')">⚡ Test</button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    async function testSingleModel(modelId) {
+      const badge = document.getElementById(`status-${modelId}`);
+      const btn = document.getElementById(`btn-test-${modelId}`);
+
+      badge.className = 'test-result-badge testing';
+      badge.innerText = 'Testing...';
+      btn.disabled = true;
+
+      const startTime = performance.now();
+      try {
+        const res = await fetch('/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer antiapi'
+          },
+          body: JSON.stringify({
+            model: modelId,
+            messages: [{ role: 'user', content: 'Say PING' }],
+            stream: false
+          })
+        });
+
+        const elapsed = Math.round(performance.now() - startTime);
+
+        if (res.ok) {
+          badge.className = 'test-result-badge ok';
+          badge.innerText = `✓ 200 OK (${elapsed}ms)`;
+        } else {
+          badge.className = 'test-result-badge err';
+          badge.innerText = `✗ ${res.status} Error (${elapsed}ms)`;
+        }
+      } catch (err) {
+        badge.className = 'test-result-badge err';
+        badge.innerText = '✗ Net Error';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function testAllModels() {
+      showToast('Testing all 8 models sequentially...');
+      for (const m of modelsList) {
+        await testSingleModel(m.id);
+      }
+      showToast('Model testing completed!');
+    }
+
+    // 3. Accounts Drag & Drop Priority
+    async function loadAccounts() {
+      try {
+        const res = await fetch('/api/accounts');
+        const data = await res.json();
+        const container = document.getElementById('accounts-container');
+        container.innerHTML = '';
+
+        if (!data.accounts || data.accounts.length === 0) {
+          container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.82rem;">No accounts in pool.</p>';
+          return;
+        }
+
+        data.accounts.forEach((acc, idx) => {
+          const item = document.createElement('div');
+          item.className = 'account-card';
+          item.draggable = true;
+          item.dataset.email = acc.email;
+
+          const initial = (acc.email || 'G')[0].toUpperCase();
+          const isPrimary = (idx === 0);
+          const pBadge = isPrimary 
+            ? `<span class="priority-badge primary">👑 Priority 1 (Used First)</span>` 
+            : `<span class="priority-badge fallback">⚡ Priority ${idx + 1} (Fallback)</span>`;
+
+          item.innerHTML = `
+            <div class="account-main-info">
+              <div class="drag-handle" title="Drag to reorder priority">⋮⋮</div>
+              <div class="avatar">${initial}</div>
+              <div class="account-text-wrap">
+                <div class="account-email-row">
+                  <span class="email-title">${acc.email}</span>
+                  ${pBadge}
+                </div>
+                <div class="meta-subtitle">
+                  <span>${acc.projectId || 'aicode-consumers'}</span>
+                  <span>•</span>
+                  <span style="color: #34d399; font-weight: 600;">Active</span>
+                </div>
+              </div>
+            </div>
+            <button class="btn btn-danger" onclick="removeAccount('${acc.email}')">Remove</button>
+          `;
+          container.appendChild(item);
+        });
+
+        initDragAndDrop(container);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    let draggedItem = null;
+
+    function initDragAndDrop(container) {
+      const items = container.querySelectorAll('.account-card');
+
+      items.forEach(item => {
+        item.addEventListener('dragstart', (e) => {
+          draggedItem = item;
+          setTimeout(() => item.classList.add('dragging'), 0);
+          e.dataTransfer.effectAllowed = 'move';
+        });
+
+        item.addEventListener('dragend', () => {
+          if (draggedItem) {
+            draggedItem.classList.remove('dragging');
+            draggedItem = null;
+          }
+        });
+
+        item.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          const afterElement = getDragAfterElement(container, e.clientY);
+          if (afterElement == null) {
+            container.appendChild(draggedItem);
+          } else {
+            container.insertBefore(draggedItem, afterElement);
+          }
+        });
+
+        item.addEventListener('drop', async (e) => {
+          e.preventDefault();
+          await saveNewOrder(container);
+        });
+      });
+    }
+
+    function getDragAfterElement(container, y) {
+      const draggableElements = [...container.querySelectorAll('.account-card:not(.dragging)')];
+
+      return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        if (offset < 0 && offset > closest.offset) {
+          return { offset: offset, element: child };
+        } else {
+          return closest;
+        }
+      }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+
+    async function saveNewOrder(container) {
+      const reorderedItems = [...container.querySelectorAll('.account-card')];
+      const newEmailsOrder = reorderedItems.map(el => el.dataset.email);
+
+      reorderedItems.forEach((el, idx) => {
+        const isPrimary = (idx === 0);
+        const pBadge = el.querySelector('.priority-badge');
+        if (pBadge) {
+          if (isPrimary) {
+            pBadge.className = 'priority-badge primary';
+            pBadge.innerHTML = '👑 Priority 1 (Used First)';
+          } else {
+            pBadge.className = 'priority-badge fallback';
+            pBadge.innerHTML = `⚡ Priority ${idx + 1} (Fallback)`;
+          }
+        }
+      });
+
+      try {
+        const res = await fetch('/api/accounts/reorder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order: newEmailsOrder })
+        });
+        if (res.ok) {
+          showToast(`Priority updated! ${newEmailsOrder[0]} is Primary.`);
+          switchQuotaAccount(newEmailsOrder[0]);
+        }
+      } catch (err) {
+        showToast('Failed to save priority order: ' + err.message);
+      }
+    }
+
+    async function removeAccount(email) {
+      if (!confirm(`Remove ${email} from pool?`)) return;
+      try {
+        await fetch('/api/accounts/remove', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        showToast(`Account ${email} removed.`);
+        loadAccounts();
+        loadStatus();
+      } catch (err) {
+        showToast('Error removing: ' + err.message);
+      }
+    }
+
+    async function addToken() {
+      const input = document.getElementById('token-input');
+      const token = input.value.trim();
+      if (!token) return;
+
+      try {
+        const res = await fetch('/api/accounts/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: token })
+        });
+        const data = await res.json();
+        if (data.email) {
+          showToast(`Account ${data.email} added!`);
+          input.value = '';
+          loadAccounts();
+          loadStatus();
+        }
+      } catch (err) {
+        showToast('Failed: ' + err.message);
+      }
+    }
+
+    // 4. Client Integration Snippets
+    const snippets = {
+      hermes: `# ~/.hermes/config.yaml
+model:
+  provider: anti-api
+  default: gemini-3.7-flash-high
+  base_url: http://127.0.0.1:8964/v1
+  key_env: HERMES_CUSTOM_TOKENIN_API_KEY
+
+providers:
+  anti-api:
+    name: Anti-API
+    base_url: http://127.0.0.1:8964/v1
+    model: gemini-3.8-flash-high
+    discover_models: true
+    models:
+      gemini-3.8-flash-high: {}
+      gemini-3.7-flash-high: {}
+      claude-sonnet-4-6: {}
+      gemini-3.1-pro-high: {}`,
+
+      cursor: `// Cursor / Windsurf Custom OpenAI Settings
+openai_base_url: "http://127.0.0.1:8964/v1"
+openai_api_key: "antiapi"
+models:
+  - "gemini-3.8-flash-high"
+  - "gemini-3.7-flash-high"
+  - "claude-sonnet-4-6"
+  - "gemini-3.1-pro-high"`,
+
+      python: `from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://127.0.0.1:8964/v1",
+    api_key="antiapi"
+)
+
+response = client.chat.completions.create(
+    model="gemini-3.8-flash-high",
+    messages=[{"role": "user", "content": "Hello!"}],
+    stream=True
+)
+
+for chunk in response:
+    print(chunk.choices[0].delta.content or "", end="", flush=True)
+print()`,
+
+      curl: `curl http://localhost:8964/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer antiapi" \
+  -d '{
+    "model": "gemini-3.8-flash-high",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "stream": true
+  }'`
+    };
+
+    let activeTab = 'hermes';
+
+    function showSnippet(tab) {
+      activeTab = tab;
+      document.querySelectorAll('#integration-tabs .chip').forEach(el => {
+        el.classList.toggle('active', el.innerText.toLowerCase().includes(tab));
+      });
+      document.getElementById('snippet-display').innerText = snippets[tab] || '';
+    }
+
+    function copySnippet() {
+      navigator.clipboard.writeText(snippets[activeTab] || '');
+      showToast('Config copied to clipboard!');
+    }
+
+    // Initialize
+    window.addEventListener('DOMContentLoaded', () => {
+      renderModelsTestList();
+      loadStatus();
+      loadAccounts();
+      showSnippet('hermes');
+      setInterval(loadStatus, 10000);
+    });
+  </script>
+</body>
+</html>

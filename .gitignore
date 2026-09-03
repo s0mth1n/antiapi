@@ -1,0 +1,15 @@
+# Compiled binaries
+antiapi
+*.exe
+*.test
+*.out
+
+# Environment and secrets
+.env
+*.local
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
