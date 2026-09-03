@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +19,24 @@ import (
 	"antiapi/upstream"
 	"antiapi/web"
 )
+
+func applyMicroJitter() {
+	jitterMaxMs := 40
+	if envVal := os.Getenv("ANTIAPI_JITTER_MS"); envVal != "" {
+		if parsed, err := strconv.Atoi(envVal); err == nil && parsed >= 0 {
+			jitterMaxMs = parsed
+		}
+	}
+	if jitterMaxMs > 0 {
+		minMs := 10
+		if jitterMaxMs <= minMs {
+			time.Sleep(time.Duration(jitterMaxMs) * time.Millisecond)
+			return
+		}
+		sleepMs := minMs + rand.Intn(jitterMaxMs-minMs)
+		time.Sleep(time.Duration(sleepMs) * time.Millisecond)
+	}
+}
 
 type Server struct {
 	upstreamClient *upstream.Client
@@ -308,6 +329,8 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	applyMicroJitter()
+
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Failed to read body", http.StatusBadRequest)
@@ -385,6 +408,8 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
+	applyMicroJitter()
 
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {

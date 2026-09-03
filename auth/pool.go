@@ -2,16 +2,18 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
-	"strings"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -24,9 +26,44 @@ type Account struct {
 	ExpiresAt         time.Time          `json:"expiresAt"`
 	ProjectID         string             `json:"projectId"`
 	RateLimitedUntil  time.Time          `json:"rateLimitedUntil,omitempty"`
+	QuarantinedUntil  time.Time          `json:"quarantinedUntil,omitempty"`
+	ConsecutiveErrors int                `json:"consecutiveErrors,omitempty"`
 	Quotas            map[string]float64 `json:"quotas,omitempty"` // Tier -> percentage
 	LastQuotaSummary  *UserQuotaSummary  `json:"-"`
+	sem               chan struct{}      `json:"-"`
+	semOnce           sync.Once          `json:"-"`
 	mu                sync.RWMutex
+}
+
+func (a *Account) getSem() chan struct{} {
+	a.semOnce.Do(func() {
+		maxConc := 2
+		if envVal := os.Getenv("ANTIAPI_MAX_CONCURRENCY"); envVal != "" {
+			if parsed, err := strconv.Atoi(envVal); err == nil && parsed > 0 {
+				maxConc = parsed
+			}
+		}
+		a.sem = make(chan struct{}, maxConc)
+	})
+	return a.sem
+}
+
+func (a *Account) Acquire(ctx context.Context) error {
+	sem := a.getSem()
+	select {
+	case sem <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (a *Account) Release() {
+	sem := a.getSem()
+	select {
+	case <-sem:
+	default:
+	}
 }
 
 func (a *Account) IsRateLimited() bool {
@@ -35,6 +72,18 @@ func (a *Account) IsRateLimited() bool {
 	return time.Now().Before(a.RateLimitedUntil)
 }
 
+func (a *Account) IsQuarantined() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return time.Now().Before(a.QuarantinedUntil)
+}
+
+func (a *Account) IsAvailable() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	now := time.Now()
+	return !now.Before(a.RateLimitedUntil) && !now.Before(a.QuarantinedUntil)
+}
 
 func (a *Account) ClearRateLimit() {
 	a.mu.Lock()
@@ -42,11 +91,32 @@ func (a *Account) ClearRateLimit() {
 	a.RateLimitedUntil = time.Time{}
 }
 
-func (a *Account) MarkRateLimited(duration time.Duration) {
+func (a *Account) RecordSuccess() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.RateLimitedUntil = time.Now().Add(duration)
-	log.Printf("[Pool] Account %s rate-limited for %v (until %s)", a.Email, duration, a.RateLimitedUntil.Format(time.Kitchen))
+	a.ConsecutiveErrors = 0
+	a.RateLimitedUntil = time.Time{}
+	a.QuarantinedUntil = time.Time{}
+}
+
+func (a *Account) RecordError(statusCode int) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if statusCode == http.StatusTooManyRequests { // 429
+		a.RateLimitedUntil = time.Now().Add(5 * time.Minute)
+		log.Printf("[Pool] Account %s rate-limited for 5m on 429 (until %s)", a.Email, a.RateLimitedUntil.Format(time.Kitchen))
+		return
+	}
+
+	if statusCode == http.StatusBadRequest || statusCode == http.StatusForbidden { // 400 or 403
+		a.ConsecutiveErrors++
+		log.Printf("[Pool] Account %s recorded error #%d (status %d)", a.Email, a.ConsecutiveErrors, statusCode)
+		if a.ConsecutiveErrors >= 3 {
+			a.QuarantinedUntil = time.Now().Add(10 * time.Minute)
+			log.Printf("[Pool] Circuit breaker tripped for %s: quarantined for 10m to prevent account flagging (until %s)", a.Email, a.QuarantinedUntil.Format(time.Kitchen))
+		}
+	}
 }
 
 func (a *Account) GetAccessToken() (string, error) {
@@ -389,17 +459,20 @@ func (p *AccountPool) NextAvailableAccount() (*Account, error) {
 
 	// Priority-based order: check accounts sequentially from index 0 (top) downwards
 	for _, acc := range p.accounts {
-		if !acc.IsRateLimited() {
+		if acc.IsAvailable() {
 			return acc, nil
 		}
 	}
 
-	// All accounts are rate-limited; find the one with the earliest reset
+	// All accounts are rate-limited or quarantined; find the one with the earliest reset
 	var bestAcc *Account
 	var earliest time.Time
 	for _, acc := range p.accounts {
 		acc.mu.RLock()
 		until := acc.RateLimitedUntil
+		if acc.QuarantinedUntil.After(until) {
+			until = acc.QuarantinedUntil
+		}
 		acc.mu.RUnlock()
 		if bestAcc == nil || until.Before(earliest) {
 			bestAcc = acc
@@ -407,7 +480,7 @@ func (p *AccountPool) NextAvailableAccount() (*Account, error) {
 		}
 	}
 
-	log.Printf("[Pool] All accounts rate-limited; falling back to %s (unlocks %s)", bestAcc.Email, earliest.Format(time.Kitchen))
+	log.Printf("[Pool] All accounts in cooldown; falling back to %s (unlocks %s)", bestAcc.Email, earliest.Format(time.Kitchen))
 	return bestAcc, nil
 }
 

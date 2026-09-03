@@ -9,6 +9,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -19,9 +21,16 @@ const (
 	DailyEndpoint    = "https://daily-cloudcode-pa.googleapis.com"
 	StandardEndpoint = "https://cloudcode-pa.googleapis.com"
 	StreamPath       = "/v1internal:streamGenerateContent?alt=sse"
-	UserAgent        = "antigravity/hub/2.9.1 darwin/arm64"
 	RequestTimeout   = 120 * time.Second
 )
+
+// BuildUserAgent dynamically generates a platform-matching user agent.
+func BuildUserAgent() string {
+	if custom := os.Getenv("ANTIGRAVITY_USER_AGENT"); custom != "" {
+		return custom
+	}
+	return fmt.Sprintf("antigravity/hub/2.9.1 %s/%s", runtime.GOOS, runtime.GOARCH)
+}
 
 type SSEEvent struct {
 	Data []byte
@@ -35,7 +44,8 @@ type Client struct {
 func NewClient() *Client {
 	return &Client{
 		httpClient: &http.Client{
-			Timeout: RequestTimeout,
+			Transport: NewStealthTransport(),
+			Timeout:   RequestTimeout,
 		},
 	}
 }
@@ -57,8 +67,13 @@ func (c *Client) StreamGenerate(ctx context.Context, payload any) (<-chan SSEEve
 			return nil, fmt.Errorf("cannot select account: %w", err)
 		}
 
+		if err := acc.Acquire(ctx); err != nil {
+			return nil, fmt.Errorf("concurrency acquire failed for %s: %w", acc.Email, err)
+		}
+
 		token, err := acc.GetAccessToken()
 		if err != nil {
+			acc.Release()
 			log.Printf("[Upstream] Failed to get access token for %s: %v", acc.Email, err)
 			continue
 		}
@@ -71,21 +86,28 @@ func (c *Client) StreamGenerate(ctx context.Context, payload any) (<-chan SSEEve
 
 		reqBytes, err := json.Marshal(reqMap)
 		if err != nil {
+			acc.Release()
 			return nil, fmt.Errorf("failed to marshal payload: %w", err)
 		}
+
+		ua := BuildUserAgent()
+		clientVersion := fmt.Sprintf("antigravity-ide/2.9.1 gl-go/%s", runtime.Version())
 
 		endpoints := []string{DailyEndpoint, StandardEndpoint}
 		for _, base := range endpoints {
 			url := base + StreamPath
 			req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBytes))
 			if err != nil {
+				acc.Release()
 				return nil, err
 			}
 
 			req.Header.Set("Authorization", "Bearer "+token)
 			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("User-Agent", UserAgent)
+			req.Header.Set("User-Agent", ua)
+			req.Header.Set("X-Goog-Api-Client", clientVersion)
 			req.Header.Set("Accept", "text/event-stream")
+			req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 
 			resp, err := c.httpClient.Do(req)
 			if err != nil {
@@ -94,10 +116,13 @@ func (c *Client) StreamGenerate(ctx context.Context, payload any) (<-chan SSEEve
 			}
 
 			if resp.StatusCode == http.StatusOK {
-				acc.ClearRateLimit()
-				log.Printf("[Upstream] 200 OK via %s on account %s", base, acc.Email)
+				acc.RecordSuccess()
+				log.Printf("[Upstream] 200 OK via %s on account %s (Stealth TLS + %s)", base, acc.Email, ua)
 				eventCh := make(chan SSEEvent, 64)
-				go c.streamReader(ctx, resp.Body, eventCh)
+				go func() {
+					defer acc.Release()
+					c.streamReader(ctx, resp.Body, eventCh)
+				}()
 				return eventCh, nil
 			}
 
@@ -112,21 +137,22 @@ func (c *Client) StreamGenerate(ctx context.Context, payload any) (<-chan SSEEve
 
 			if resp.StatusCode == http.StatusTooManyRequests {
 				log.Printf("[Upstream] 429 Quota Exceeded on %s: %s", acc.Email, string(body))
-				acc.MarkRateLimited(5 * time.Minute)
+				acc.RecordError(http.StatusTooManyRequests)
 				lastErr = fmt.Errorf("quota exceeded on %s", acc.Email)
 				break // break endpoint loop to try next account in pool
 			}
 
-			if resp.StatusCode == http.StatusBadRequest {
-				log.Printf("[Upstream] 400 Payload Error: %s", string(body))
-				return nil, fmt.Errorf("upstream rejected payload (400): %s", string(body))
+			if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusForbidden {
+				log.Printf("[Upstream] %d Error on %s: %s", resp.StatusCode, acc.Email, string(body))
+				acc.RecordError(resp.StatusCode)
+				acc.Release()
+				return nil, fmt.Errorf("upstream rejected request (%d): %s", resp.StatusCode, string(body))
 			}
+
 			lastErr = fmt.Errorf("upstream error (%d): %s", resp.StatusCode, string(body))
-			if resp.StatusCode == 400 {
-				log.Printf("[Upstream] 400 Payload was: %s", string(reqBytes))
-			}
 			log.Printf("[Upstream] Request to %s failed (%d): %s", base, resp.StatusCode, string(body))
 		}
+		acc.Release()
 	}
 
 	return nil, lastErr

@@ -8,6 +8,11 @@ antiapi
 .env
 *.local
 
+# Nix and direnv
+.direnv/
+result
+result-*
+
 # Python cache
 __pycache__/
 *.py[cod]
