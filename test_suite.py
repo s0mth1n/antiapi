@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 BASE_URL = "http://localhost:8964"
 
 def log_test(name, success, detail=""):
-    status = "✓ PASS" if success else "✗ FAIL"
+    status = "PASS" if success else "FAIL"
     color = "\033[92m" if success else "\033[91m"
     reset = "\033[0m"
     print(f"{color}{status}{reset} | {name} {('- ' + detail) if detail else ''}")
@@ -61,7 +61,7 @@ def test_streaming(model_name):
                     delta = c["choices"][0]["delta"].get("content", "")
                     if delta:
                         tokens.append(delta)
-                except:
+                except (json.JSONDecodeError, KeyError, IndexError):
                     pass
             elif l == "data: [DONE]":
                 done = True
@@ -111,7 +111,7 @@ def test_claude_messages_streaming():
                     d = json.loads(l[6:])
                     if d.get("type") == "content_block_delta":
                         tokens.append(d["delta"].get("text", ""))
-                except:
+                except (json.JSONDecodeError, KeyError):
                     pass
     full_text = "".join(tokens).strip()
     log_test("Stream Claude (/v1/messages)", len(full_text) > 0, f"Response: {repr(full_text[:40])}")

@@ -24,7 +24,6 @@ func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmsgprefix)
 	log.SetPrefix("[antiapi] ")
 
-	// Initialize account pool
 	pool := auth.GetPool()
 	accCount := pool.Count()
 	if accCount == 0 {

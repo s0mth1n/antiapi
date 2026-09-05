@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -25,8 +26,6 @@ var OAuthScopes = []string{
 	"https://www.googleapis.com/auth/cloud-platform",
 	"https://www.googleapis.com/auth/userinfo.email",
 	"https://www.googleapis.com/auth/userinfo.profile",
-	"https://www.googleapis.com/auth/cclog",
-	"https://www.googleapis.com/auth/experimentsandconfigs",
 }
 
 type PKCESession struct {
@@ -35,7 +34,11 @@ type PKCESession struct {
 }
 
 var (
+	pkceMu    sync.RWMutex
 	pkceStore = make(map[string]PKCESession)
+
+	listenerMu     sync.Mutex
+	listenerActive bool
 )
 
 func generateRandomString(length int) string {
@@ -52,10 +55,12 @@ func GenerateAuthURL() (string, string) {
 	h.Write([]byte(verifier))
 	challenge := base64.RawURLEncoding.EncodeToString(h.Sum(nil))
 
+	pkceMu.Lock()
 	pkceStore[state] = PKCESession{
 		Verifier:  verifier,
 		ExpiresAt: time.Now().Add(10 * time.Minute),
 	}
+	pkceMu.Unlock()
 
 	params := url.Values{}
 	params.Set("client_id", ClientID)
@@ -72,11 +77,16 @@ func GenerateAuthURL() (string, string) {
 }
 
 func ExchangeCode(code, state string) (refreshToken, accessToken, email string, err error) {
+	pkceMu.Lock()
 	session, ok := pkceStore[state]
+	if ok {
+		delete(pkceStore, state)
+	}
+	pkceMu.Unlock()
+
 	if !ok || time.Now().After(session.ExpiresAt) {
 		return "", "", "", fmt.Errorf("invalid or expired OAuth session")
 	}
-	delete(pkceStore, state)
 
 	form := url.Values{}
 	form.Set("code", code)
@@ -89,24 +99,25 @@ func ExchangeCode(code, state string) (refreshToken, accessToken, email string, 
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.PostForm(TokenURL, form)
 	if err != nil {
-		return "", "", "", fmt.Errorf("token exchange request failed: %w", err)
+		return "", "", "", fmt.Errorf("token exchange failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		return "", "", "", fmt.Errorf("token exchange failed (%d): %s", resp.StatusCode, string(body))
+		return "", "", "", fmt.Errorf("token exchange returned %d: %s", resp.StatusCode, string(body))
 	}
 
 	var res struct {
 		AccessToken  string `json:"access_token"`
 		RefreshToken string `json:"refresh_token"`
+		ExpiresIn    int    `json:"expires_in"`
 	}
 	if err := json.Unmarshal(body, &res); err != nil {
-		return "", "", "", fmt.Errorf("failed to parse tokens: %w", err)
+		return "", "", "", fmt.Errorf("invalid token JSON: %w", err)
 	}
 
-	// Fetch user email
+	// Fetch user email using newly acquired token
 	userReq, _ := http.NewRequest("GET", OAuthUserInfoURL, nil)
 	userReq.Header.Set("Authorization", "Bearer "+res.AccessToken)
 	userResp, err := client.Do(userReq)
@@ -114,13 +125,14 @@ func ExchangeCode(code, state string) (refreshToken, accessToken, email string, 
 		var uInfo struct {
 			Email string `json:"email"`
 		}
-		json.NewDecoder(userResp.Body).Decode(&uInfo)
+		if json.NewDecoder(userResp.Body).Decode(&uInfo) == nil && uInfo.Email != "" {
+			email = uInfo.Email
+		}
 		userResp.Body.Close()
-		email = uInfo.Email
 	}
 
 	if email == "" {
-		email = "google-user"
+		email = "user-" + generateRandomString(6) + "@gmail.com"
 	}
 
 	return res.RefreshToken, res.AccessToken, email, nil
@@ -128,6 +140,14 @@ func ExchangeCode(code, state string) (refreshToken, accessToken, email string, 
 
 // StartOAuthCallbackListener launches temporary listener on port 51121 to capture authorization code
 func StartOAuthCallbackListener() {
+	listenerMu.Lock()
+	if listenerActive {
+		listenerMu.Unlock()
+		return
+	}
+	listenerActive = true
+	listenerMu.Unlock()
+
 	mux := http.NewServeMux()
 	server := &http.Server{
 		Addr:    fmt.Sprintf("127.0.0.1:%d", OAuthCallbackPort),
@@ -153,7 +173,7 @@ func StartOAuthCallbackListener() {
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprintf(w, `<html><body style="background:#090d16;color:#f0f4fc;font-family:sans-serif;padding:3rem;text-align:center;">
-			<h1 style="color:#10b981;">✓ Successfully Authenticated</h1>
+			<h1 style="color:#10b981;">Successfully Authenticated</h1>
 			<p>Account <b>%s</b> added to Antigravity pool.</p>
 			<p style="color:#8b9bb4;margin-top:1rem;">You may now close this window.</p>
 			<script>setTimeout(() => window.location.href='http://localhost:8964/', 2000);</script>
@@ -163,6 +183,11 @@ func StartOAuthCallbackListener() {
 	})
 
 	go func() {
+		defer func() {
+			listenerMu.Lock()
+			listenerActive = false
+			listenerMu.Unlock()
+		}()
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Printf("[OAuth] Callback listener closed: %v", err)
 		}

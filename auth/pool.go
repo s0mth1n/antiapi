@@ -21,20 +21,21 @@ import (
 )
 
 type Account struct {
-	ID                string             `json:"id"`
-	Email             string             `json:"email"`
-	RefreshToken      string             `json:"refreshToken"`
-	AccessToken       string             `json:"accessToken"`
-	ExpiresAt         time.Time          `json:"expiresAt"`
-	ProjectID         string             `json:"projectId"`
-	RateLimitedUntil  time.Time          `json:"rateLimitedUntil,omitempty"`
-	QuarantinedUntil  time.Time          `json:"quarantinedUntil,omitempty"`
-	ConsecutiveErrors int                `json:"consecutiveErrors,omitempty"`
-	Quotas            map[string]float64 `json:"quotas,omitempty"` // Tier -> percentage
-	LastQuotaSummary  *UserQuotaSummary  `json:"-"`
-	sem               chan struct{}      `json:"-"`
-	semOnce           sync.Once          `json:"-"`
-	mu                sync.RWMutex
+	ID                 string             `json:"id"`
+	Email              string             `json:"email"`
+	RefreshToken       string             `json:"refreshToken"`
+	AccessToken        string             `json:"accessToken"`
+	ExpiresAt          time.Time          `json:"expiresAt"`
+	ProjectID          string             `json:"projectId"`
+	RateLimitedUntil   time.Time          `json:"rateLimitedUntil,omitempty"`
+	QuarantinedUntil   time.Time          `json:"quarantinedUntil,omitempty"`
+	ConsecutiveErrors  int                `json:"consecutiveErrors,omitempty"`
+	Quotas             map[string]float64 `json:"quotas,omitempty"` // Tier -> percentage
+	LastQuotaSummary   *UserQuotaSummary  `json:"-"`
+	LastQuotaFetchTime time.Time          `json:"-"`
+	sem                chan struct{}      `json:"-"`
+	semOnce            sync.Once          `json:"-"`
+	mu                 sync.RWMutex
 }
 
 func (a *Account) getSem() chan struct{} {
@@ -128,7 +129,13 @@ func (a *Account) RecordError(statusCode int) {
 		return
 	}
 
-	if statusCode == http.StatusBadRequest || statusCode == http.StatusForbidden { // 400 or 403
+	if statusCode == http.StatusForbidden { // 403 (Validation Required or Revoked)
+		a.QuarantinedUntil = time.Now().Add(15 * time.Minute)
+		log.Printf("[Pool] Account %s quarantined for 15m on 403 validation (until %s)", a.Email, a.QuarantinedUntil.Format(time.Kitchen))
+		return
+	}
+
+	if statusCode == http.StatusBadRequest { // 400
 		a.ConsecutiveErrors++
 		log.Printf("[Pool] Account %s recorded error #%d (status %d)", a.Email, a.ConsecutiveErrors, statusCode)
 		if a.ConsecutiveErrors >= 3 {
@@ -154,6 +161,11 @@ func (a *Account) GetAccessToken() (string, error) {
 func (a *Account) Refresh() (string, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	// Double-checked locking: check if refreshed by another concurrent caller while waiting for lock
+	if a.AccessToken != "" && time.Now().Add(2*time.Minute).Before(a.ExpiresAt) {
+		return a.AccessToken, nil
+	}
 
 	if a.RefreshToken == "" {
 		return "", fmt.Errorf("account %s has no refresh token", a.Email)
@@ -202,7 +214,6 @@ func (a *Account) Refresh() (string, error) {
 
 	return a.AccessToken, nil
 }
-
 
 func (a *Account) resolveUserInfo() {
 	userReq, _ := http.NewRequest("GET", "https://www.googleapis.com/oauth2/v1/userinfo?alt=json", nil)
@@ -405,7 +416,14 @@ func (p *AccountPool) saveLocked() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(p.storagePath, data, 0600)
+	tmpPath := p.storagePath + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
+		return fmt.Errorf("failed to write tmp accounts file: %w", err)
+	}
+	if err := os.Rename(tmpPath, p.storagePath); err != nil {
+		return fmt.Errorf("failed to atomically rename accounts file: %w", err)
+	}
+	return nil
 }
 
 func (p *AccountPool) AddAccount(email, refreshToken, projectID string) *Account {
@@ -463,9 +481,9 @@ func (p *AccountPool) RemoveAccount(email string) bool {
 	return false
 }
 
-// NextAvailableAccount selects an account that is not rate-limited using round-robin
-// NextAvailableAccount selects the highest-priority account (top of list) that is not rate-limited
-func (p *AccountPool) NextAvailableAccount() (*Account, error) {
+// NextAvailableAccount selects an account using round-robin across healthy and available accounts.
+// An optional exclusion map can be supplied to skip accounts that have already failed during a retry chain.
+func (p *AccountPool) NextAvailableAccount(exclude ...map[string]bool) (*Account, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -474,16 +492,33 @@ func (p *AccountPool) NextAvailableAccount() (*Account, error) {
 		return nil, fmt.Errorf("no accounts in pool")
 	}
 
+	var excluded map[string]bool
+	if len(exclude) > 0 {
+		excluded = exclude[0]
+	}
+
 	// Priority 1: Check accounts that are available AND have healthy remaining quota (> 5%)
-	for _, acc := range p.accounts {
+	for i := 0; i < n; i++ {
+		idx := (p.currentIndex + i) % n
+		acc := p.accounts[idx]
+		if excluded != nil && excluded[acc.Email] {
+			continue
+		}
 		if acc.IsAvailable() && acc.HasHealthyQuota() {
+			p.currentIndex = (idx + 1) % n
 			return acc, nil
 		}
 	}
 
 	// Priority 2: Fallback to any available account (even if low quota)
-	for _, acc := range p.accounts {
+	for i := 0; i < n; i++ {
+		idx := (p.currentIndex + i) % n
+		acc := p.accounts[idx]
+		if excluded != nil && excluded[acc.Email] {
+			continue
+		}
 		if acc.IsAvailable() {
+			p.currentIndex = (idx + 1) % n
 			return acc, nil
 		}
 	}
@@ -504,8 +539,10 @@ func (p *AccountPool) NextAvailableAccount() (*Account, error) {
 		}
 	}
 
-	log.Printf("[Pool] All accounts in cooldown; falling back to %s (unlocks %s)", bestAcc.Email, earliest.Format(time.Kitchen))
-	return bestAcc, nil
+	if bestAcc != nil {
+		return nil, fmt.Errorf("all %d accounts in pool are in cooldown (earliest unlock: %s at %s)", len(p.accounts), bestAcc.Email, earliest.Format(time.Kitchen))
+	}
+	return nil, fmt.Errorf("no available accounts in pool")
 }
 
 // ReorderAccounts sets the priority order of accounts based on the provided list of emails
@@ -553,7 +590,6 @@ func (p *AccountPool) Count() int {
 	return len(p.accounts)
 }
 
-
 type QuotaBucket struct {
 	BucketID          string  `json:"bucketId"`
 	DisplayName       string  `json:"displayName"`
@@ -575,8 +611,22 @@ type UserQuotaSummary struct {
 }
 
 func (a *Account) FetchQuotaSummary() (*UserQuotaSummary, error) {
+	a.mu.RLock()
+	if a.LastQuotaSummary != nil && time.Since(a.LastQuotaFetchTime) < 60*time.Second {
+		summary := a.LastQuotaSummary
+		a.mu.RUnlock()
+		return summary, nil
+	}
+	a.mu.RUnlock()
+
 	token, err := a.GetAccessToken()
 	if err != nil {
+		a.mu.RLock()
+		cached := a.LastQuotaSummary
+		a.mu.RUnlock()
+		if cached != nil {
+			return cached, nil
+		}
 		return nil, err
 	}
 
@@ -591,7 +641,7 @@ func (a *Account) FetchQuotaSummary() (*UserQuotaSummary, error) {
 		"https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
 	}
 
-	client := transport.NewClient(10 * time.Second)
+	client := &http.Client{Timeout: 6 * time.Second}
 	var lastErr error
 
 	for _, ep := range endpoints {
@@ -603,18 +653,36 @@ func (a *Account) FetchQuotaSummary() (*UserQuotaSummary, error) {
 			lastErr = err
 			continue
 		}
-		defer resp.Body.Close()
 
 		if resp.StatusCode == http.StatusOK {
 			var summary UserQuotaSummary
-			if err := json.NewDecoder(resp.Body).Decode(&summary); err == nil {
-			a.mu.Lock()
-			a.LastQuotaSummary = &summary
-			a.mu.Unlock()
+			err := json.NewDecoder(resp.Body).Decode(&summary)
+			resp.Body.Close()
+			if err == nil {
+				a.mu.Lock()
+				a.LastQuotaSummary = &summary
+				a.LastQuotaFetchTime = time.Now()
+				a.mu.Unlock()
 				return &summary, nil
 			}
+		} else {
+			resp.Body.Close()
 		}
 		lastErr = fmt.Errorf("retrieveUserQuotaSummary returned %d", resp.StatusCode)
 	}
+
+	// Record fetch time even on error to throttle repeated checks on failing or rate-limited accounts
+	a.mu.Lock()
+	a.LastQuotaFetchTime = time.Now()
+	a.mu.Unlock()
+
+	// Fall back to cached summary if available so temporary upstream rate-limits don't blank out state
+	a.mu.RLock()
+	cached := a.LastQuotaSummary
+	a.mu.RUnlock()
+	if cached != nil {
+		return cached, nil
+	}
+
 	return nil, lastErr
 }

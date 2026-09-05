@@ -1,12 +1,15 @@
 package transport
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -65,13 +68,45 @@ func NewStealthTransport() http.RoundTripper {
 			}
 
 			dialer := &net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
+				Timeout:       5 * time.Second,
+				KeepAlive:     30 * time.Second,
+				FallbackDelay: 200 * time.Millisecond,
 			}
 
-			rawConn, err := dialer.DialContext(ctx, network, addr)
-			if err != nil {
-				return nil, err
+			var rawConn net.Conn
+			proxyFunc := http.ProxyFromEnvironment
+			dummyReq := &http.Request{URL: &url.URL{Scheme: "https", Host: addr}}
+			proxyURL, proxyErr := proxyFunc(dummyReq)
+			if proxyErr == nil && proxyURL != nil {
+				proxyConn, err := dialer.DialContext(ctx, "tcp", proxyURL.Host)
+				if err != nil {
+					return nil, fmt.Errorf("failed to dial proxy %s: %w", proxyURL.Host, err)
+				}
+				connectReq := fmt.Sprintf("CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", addr, addr)
+				if proxyURL.User != nil {
+					basicAuth := base64.StdEncoding.EncodeToString([]byte(proxyURL.User.String()))
+					connectReq = fmt.Sprintf("CONNECT %s HTTP/1.1\r\nHost: %s\r\nProxy-Authorization: Basic %s\r\n\r\n", addr, addr, basicAuth)
+				}
+				if _, err := proxyConn.Write([]byte(connectReq)); err != nil {
+					proxyConn.Close()
+					return nil, fmt.Errorf("proxy CONNECT write failed: %w", err)
+				}
+				resp, err := http.ReadResponse(bufio.NewReader(proxyConn), dummyReq)
+				if err != nil {
+					proxyConn.Close()
+					return nil, fmt.Errorf("proxy CONNECT response failed: %w", err)
+				}
+				if resp.StatusCode != http.StatusOK {
+					proxyConn.Close()
+					return nil, fmt.Errorf("proxy CONNECT returned status %d", resp.StatusCode)
+				}
+				rawConn = proxyConn
+			} else {
+				var err error
+				rawConn, err = dialer.DialContext(ctx, network, addr)
+				if err != nil {
+					return nil, err
+				}
 			}
 
 			uConn := utls.UClient(rawConn, &utls.Config{
@@ -92,8 +127,9 @@ func NewStealthTransport() http.RoundTripper {
 	st.h1Transport = &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
+			Timeout:       5 * time.Second,
+			KeepAlive:     30 * time.Second,
+			FallbackDelay: 200 * time.Millisecond,
 		}).DialContext,
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 10,
@@ -111,6 +147,17 @@ func (st *StealthTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	resp, err := st.h2Transport.RoundTrip(req)
 	if err == nil {
 		return resp, nil
+	}
+
+	if req.Context().Err() != nil {
+		return nil, req.Context().Err()
+	}
+
+	// Rewind request body if consumed by H2 transport
+	if req.GetBody != nil {
+		if b, getErr := req.GetBody(); getErr == nil {
+			req.Body = b
+		}
 	}
 
 	log.Printf("[Transport] HTTP/2 stealth attempt note: %v. Falling back to HTTP/1.1", err)

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,8 +21,8 @@ import (
 	"antiapi/web"
 )
 
-func applyAdaptiveJitter(payloadLen int) {
-	baseJitter := 35
+func applyAdaptiveJitter(ctx context.Context, payloadLen int) {
+	baseJitter := 0
 	if envVal := os.Getenv("ANTIAPI_JITTER_MS"); envVal != "" {
 		if parsed, err := strconv.Atoi(envVal); err == nil && parsed >= 0 {
 			baseJitter = parsed
@@ -40,12 +41,14 @@ func applyAdaptiveJitter(payloadLen int) {
 
 	minMs := 10
 	maxMs := baseJitter + extraMs
-	if maxMs <= minMs {
-		time.Sleep(time.Duration(maxMs) * time.Millisecond)
-		return
+	sleepMs := maxMs
+	if maxMs > minMs {
+		sleepMs = minMs + rand.Intn(maxMs-minMs)
 	}
-	sleepMs := minMs + rand.Intn(maxMs-minMs)
-	time.Sleep(time.Duration(sleepMs) * time.Millisecond)
+	select {
+	case <-ctx.Done():
+	case <-time.After(time.Duration(sleepMs) * time.Millisecond):
+	}
 }
 
 type Server struct {
@@ -83,7 +86,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	lw := &statusLoggingResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 	s.mux.ServeHTTP(lw, r)
 	dur := time.Since(start)
-	
+
 	// Record non-poll requests in logs
 	if !strings.HasPrefix(r.URL.Path, "/api/logs") && !strings.HasPrefix(r.URL.Path, "/health") {
 		clientIP := r.RemoteAddr
@@ -122,35 +125,16 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if data, err := os.ReadFile("web/dashboard.html"); err == nil {
+		w.Write(data)
+		return
+	}
 	w.Write(web.DashboardHTML)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status":"ok"}`))
-}
-
-
-func formatResetDuration(resetStr string, fallback string) string {
-	if resetStr == "" {
-		return fallback
-	}
-	t, err := time.Parse(time.RFC3339, resetStr)
-	if err != nil {
-		return fallback
-	}
-	d := time.Until(t)
-	if d <= 0 {
-		return "less than 1 minute"
-	}
-	hours := int(d.Hours())
-	mins := int(d.Minutes()) % 60
-	if hours >= 24 {
-		days := hours / 24
-		remHours := hours % 24
-		return fmt.Sprintf("%d days, %d hours", days, remHours)
-	}
-	return fmt.Sprintf("%d hours, %d minutes", hours, mins)
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
@@ -165,28 +149,30 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 	selectedEmail := r.URL.Query().Get("account")
 	if selectedEmail == "" && len(accountEmails) > 0 {
-		// Prefer sriniv4sreddy if present (IDE active account), else first
 		selectedEmail = accountEmails[0]
-		for _, e := range accountEmails {
-			if strings.Contains(e, "sriniv4s") {
-				selectedEmail = e
-				break
-			}
-		}
-	}
-
-	type AccQuota struct {
-		Email   string                 `json:"email"`
-		Summary *auth.UserQuotaSummary `json:"summary"`
-		Error   string                 `json:"error,omitempty"`
 	}
 
 	quotaSummaries := make(map[string]*auth.UserQuotaSummary)
+	type accResult struct {
+		email   string
+		summary *auth.UserQuotaSummary
+	}
+	resCh := make(chan accResult, len(accs))
+	var wg sync.WaitGroup
 	for _, a := range accs {
-		summary, err := a.FetchQuotaSummary()
-		if err == nil && summary != nil {
-			quotaSummaries[a.Email] = summary
-		}
+		wg.Add(1)
+		go func(acc *auth.Account) {
+			defer wg.Done()
+			sum, err := acc.FetchQuotaSummary()
+			if err == nil && sum != nil {
+				resCh <- accResult{email: acc.Email, summary: sum}
+			}
+		}(a)
+	}
+	wg.Wait()
+	close(resCh)
+	for r := range resCh {
+		quotaSummaries[r.email] = r.summary
 	}
 
 	// Backwards compatibility percentages
@@ -345,7 +331,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	applyAdaptiveJitter(len(bodyBytes))
+	applyAdaptiveJitter(r.Context(), len(bodyBytes))
 
 	var req translator.OpenAIChatRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
@@ -382,11 +368,11 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			}
 
 			parsed, err := translator.ParseGoogleSSEChunk(event.Data)
-			if err != nil || (parsed.Text == "" && parsed.FinishReason == "" && len(parsed.ToolCalls) == 0) {
+			if err != nil || (parsed.Text == "" && parsed.ReasoningText == "" && parsed.FinishReason == "" && len(parsed.ToolCalls) == 0) {
 				continue
 			}
 
-			chunk := translator.FormatOpenAIChunk(completionID, resolvedModel, parsed.Text, parsed.FinishReason, parsed.ToolCalls)
+			chunk := translator.FormatOpenAIChunk(completionID, resolvedModel, parsed.Text, parsed.ReasoningText, parsed.FinishReason, parsed.ToolCalls)
 			w.Write([]byte(chunk))
 			flusher.Flush()
 		}
@@ -397,6 +383,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var fullText strings.Builder
+	var fullReasoning strings.Builder
 	var allToolCalls []translator.OpenAIToolCall
 	for event := range eventCh {
 		if event.Err != nil {
@@ -404,13 +391,14 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		}
 		parsed, _ := translator.ParseGoogleSSEChunk(event.Data)
 		fullText.WriteString(parsed.Text)
+		fullReasoning.WriteString(parsed.ReasoningText)
 		if len(parsed.ToolCalls) > 0 {
 			allToolCalls = append(allToolCalls, parsed.ToolCalls...)
 		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(translator.FormatOpenAINonStream(completionID, resolvedModel, fullText.String(), allToolCalls))
+	w.Write(translator.FormatOpenAINonStream(completionID, resolvedModel, fullText.String(), fullReasoning.String(), allToolCalls))
 }
 
 func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
@@ -425,7 +413,7 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	applyAdaptiveJitter(len(bodyBytes))
+	applyAdaptiveJitter(r.Context(), len(bodyBytes))
 
 	var req translator.ClaudeRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
@@ -468,53 +456,117 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		initBytes, _ := json.Marshal(initPayload)
 		w.Write([]byte(fmt.Sprintf("event: message_start\ndata: %s\n\n", string(initBytes))))
 
-		blockStart := map[string]any{
-			"type":          "content_block_start",
-			"index":         0,
-			"content_block": map[string]string{"type": "text", "text": ""},
-		}
-		bsBytes, _ := json.Marshal(blockStart)
-		w.Write([]byte(fmt.Sprintf("event: content_block_start\ndata: %s\n\n", string(bsBytes))))
-		flusher.Flush()
+		blockIndex := 0
+		textBlockStarted := false
+		stopReason := "end_turn"
 
 		for event := range eventCh {
 			if event.Err != nil {
 				break
 			}
 			parsed, err := translator.ParseGoogleSSEChunk(event.Data)
-			if err != nil || parsed.Text == "" {
+			if err != nil {
 				continue
 			}
 
-			ed := map[string]any{
-				"type":  "content_block_delta",
-				"index": 0,
-				"delta": map[string]string{"type": "text_delta", "text": parsed.Text},
+			if parsed.Text != "" {
+				if !textBlockStarted {
+					blockStart := map[string]any{
+						"type":          "content_block_start",
+						"index":         blockIndex,
+						"content_block": map[string]string{"type": "text", "text": ""},
+					}
+					bsBytes, _ := json.Marshal(blockStart)
+					w.Write([]byte(fmt.Sprintf("event: content_block_start\ndata: %s\n\n", string(bsBytes))))
+					textBlockStarted = true
+				}
+
+				ed := map[string]any{
+					"type":  "content_block_delta",
+					"index": blockIndex,
+					"delta": map[string]string{"type": "text_delta", "text": parsed.Text},
+				}
+				dBytes, _ := json.Marshal(ed)
+				w.Write([]byte(fmt.Sprintf("event: content_block_delta\ndata: %s\n\n", string(dBytes))))
+				flusher.Flush()
 			}
-			dBytes, _ := json.Marshal(ed)
-			w.Write([]byte(fmt.Sprintf("event: content_block_delta\ndata: %s\n\n", string(dBytes))))
-			flusher.Flush()
+
+			if len(parsed.ToolCalls) > 0 {
+				stopReason = "tool_use"
+				if textBlockStarted {
+					w.Write([]byte(fmt.Sprintf("event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":%d}\n\n", blockIndex)))
+					blockIndex++
+					textBlockStarted = false
+				}
+
+				for _, tc := range parsed.ToolCalls {
+					cbStart := map[string]any{
+						"type":  "content_block_start",
+						"index": blockIndex,
+						"content_block": map[string]any{
+							"type":  "tool_use",
+							"id":    tc.ID,
+							"name":  tc.Function.Name,
+							"input": map[string]any{},
+						},
+					}
+					csbBytes, _ := json.Marshal(cbStart)
+					w.Write([]byte(fmt.Sprintf("event: content_block_start\ndata: %s\n\n", string(csbBytes))))
+
+					cbDelta := map[string]any{
+						"type":  "content_block_delta",
+						"index": blockIndex,
+						"delta": map[string]any{
+							"type":         "input_json_delta",
+							"partial_json": tc.Function.Arguments,
+						},
+					}
+					cdBytes, _ := json.Marshal(cbDelta)
+					w.Write([]byte(fmt.Sprintf("event: content_block_delta\ndata: %s\n\n", string(cdBytes))))
+
+					w.Write([]byte(fmt.Sprintf("event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":%d}\n\n", blockIndex)))
+					blockIndex++
+				}
+				flusher.Flush()
+			}
 		}
 
-		w.Write([]byte("event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n"))
+		if textBlockStarted {
+			w.Write([]byte(fmt.Sprintf("event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":%d}\n\n", blockIndex)))
+		}
+
+		msgDelta := map[string]any{
+			"type": "message_delta",
+			"delta": map[string]any{
+				"stop_reason":   stopReason,
+				"stop_sequence": nil,
+			},
+			"usage": map[string]int{"output_tokens": 10},
+		}
+		mdBytes, _ := json.Marshal(msgDelta)
+		w.Write([]byte(fmt.Sprintf("event: message_delta\ndata: %s\n\n", string(mdBytes))))
+
 		w.Write([]byte("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"))
 		flusher.Flush()
 		return
 	}
 
 	var fullText strings.Builder
+	var allToolCalls []translator.OpenAIToolCall
 	for event := range eventCh {
 		if event.Err != nil {
 			break
 		}
 		parsed, _ := translator.ParseGoogleSSEChunk(event.Data)
 		fullText.WriteString(parsed.Text)
+		if len(parsed.ToolCalls) > 0 {
+			allToolCalls = append(allToolCalls, parsed.ToolCalls...)
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(translator.FormatClaudeNonStream(msgID, resolvedModel, fullText.String()))
+	w.Write(translator.FormatClaudeNonStream(msgID, resolvedModel, fullText.String(), allToolCalls))
 }
-
 
 func (s *Server) handleReorderAccounts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -537,7 +589,6 @@ func (s *Server) handleReorderAccounts(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "order": body.Order})
 }
-
 
 type RequestLog struct {
 	Timestamp string `json:"timestamp"`

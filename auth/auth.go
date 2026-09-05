@@ -19,10 +19,10 @@ import (
 )
 
 const (
-	ClientID     = "REMOVED_OAUTH_CLIENT_ID.apps.googleusercontent.com"
-	ClientSecret = "REMOVED_OAUTH_CLIENT_SECRET"
-	TokenURL     = "https://oauth2.googleapis.com/token"
-	ProjectURL   = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
+	ClientID       = "REMOVED_OAUTH_CLIENT_ID.apps.googleusercontent.com"
+	ClientSecret   = "REMOVED_OAUTH_CLIENT_SECRET"
+	TokenURL       = "https://oauth2.googleapis.com/token"
+	ProjectURL     = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
 	DefaultProject = "aicode-consumers"
 )
 

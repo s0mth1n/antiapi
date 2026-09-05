@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	CloudCodeBaseURL = "https://daily-cloudcode-pa.googleapis.com"
-	FallbackBaseURL  = "https://cloudcode-pa.googleapis.com"
+	CloudCodeBaseURL = "https://cloudcode-pa.googleapis.com"
+	FallbackBaseURL  = "https://daily-cloudcode-pa.googleapis.com"
 )
 
 type ModelQuota struct {
@@ -148,23 +148,6 @@ func (r *Registry) FetchLiveModels() error {
 	r.lastUpdated = time.Now()
 	log.Printf("[Models] Updated %d models from Google upstream", len(r.models))
 	return nil
-}
-
-func categorizeTier(id string) string {
-	lower := strings.ToLower(id)
-	if strings.Contains(lower, "claude") {
-		return "Claude"
-	}
-	if strings.Contains(lower, "gpt") {
-		return "GPT"
-	}
-	if strings.Contains(lower, "flash") {
-		return "Gemini Flash"
-	}
-	if strings.Contains(lower, "pro") {
-		return "Gemini Pro"
-	}
-	return "Other"
 }
 
 // ResolveModel maps any user/client model name to a valid Antigravity model ID

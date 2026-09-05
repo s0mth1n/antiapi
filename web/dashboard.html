@@ -6,954 +6,1533 @@
   <title>AntiAPI — Antigravity Gateway</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-base: #06080d;
-      --bg-surface: #0c1018;
-      --bg-card: #080b11;
-      --bg-input: #05070a;
-      --border-subtle: rgba(255, 255, 255, 0.06);
-      --border-focus: rgba(99, 102, 241, 0.45);
-      --border-highlight: rgba(255, 255, 255, 0.12);
+      --bg-canvas: #090b0e;
+      --bg-header: #0d1015;
+      --bg-surface: #11151c;
+      --bg-surface-elevated: #161c24;
+      --bg-surface-hover: #1c232e;
+      --bg-input: #0b0e13;
 
-      --primary: #6366f1;
-      --primary-hover: #4f46e5;
-      --primary-glow: rgba(99, 102, 241, 0.22);
+      --border-hairline: rgba(255, 255, 255, 0.07);
+      --border-subtle: rgba(255, 255, 255, 0.12);
+      --border-focus: #3b82f6;
 
-      --text-main: #f8fafc;
-      --text-muted: #94a3b8;
-      --text-faint: #64748b;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --accent-subtle: rgba(37, 99, 235, 0.12);
+      --accent-text: #60a5fa;
 
-      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-      --font-mono: 'JetBrains Mono', monospace;
+      --success: #10b981;
+      --success-subtle: rgba(16, 185, 129, 0.1);
+      --success-border: rgba(16, 185, 129, 0.25);
+      --success-text: #34d399;
 
-      --radius-sm: 8px;
-      --radius-md: 12px;
-      --radius-lg: 16px;
-      --radius-xl: 20px;
+      --warning: #f59e0b;
+      --warning-subtle: rgba(245, 158, 11, 0.1);
+      --warning-border: rgba(245, 158, 11, 0.25);
+      --warning-text: #fbbf24;
 
-      --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.6), 0 0 1px 1px var(--border-subtle);
+      --danger: #ef4444;
+      --danger-subtle: rgba(239, 68, 68, 0.1);
+      --danger-border: rgba(239, 68, 68, 0.25);
+      --danger-text: #f87171;
+
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-tertiary: #64748b;
+      --text-code: #cbd5e1;
+
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+      --radius-xs: 3px;
+      --radius-sm: 5px;
+      --radius-md: 7px;
+      --radius-lg: 9px;
+
+      --shadow-surface: 0 1px 3px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--border-hairline);
+      --shadow-elevated: 0 8px 24px -4px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--border-hairline);
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
 
     body {
-      background-color: var(--bg-base);
-      color: var(--text-main);
+      background-color: var(--bg-canvas);
+      color: var(--text-primary);
       font-family: var(--font-sans);
       min-height: 100vh;
       line-height: 1.5;
-      overflow-x: hidden;
-      background-image: 
-        radial-gradient(circle at 10% 0%, rgba(99, 102, 241, 0.1) 0%, transparent 40%),
-        radial-gradient(circle at 90% 100%, rgba(6, 182, 212, 0.06) 0%, transparent 40%),
-        linear-gradient(180deg, rgba(6, 8, 13, 0.9) 0%, rgba(6, 8, 13, 1) 100%);
-      background-attachment: fixed;
+      font-size: 13.5px;
+      letter-spacing: -0.01em;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
 
-    /* Top Navigation */
-    header {
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.14);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    /* TOP APPLICATION BAR */
+    header.app-header {
       position: sticky;
       top: 0;
-      z-index: 50;
-      background: rgba(6, 8, 13, 0.85);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border-bottom: 1px solid var(--border-subtle);
-      padding: 0.75rem clamp(1rem, 4vw, 2.5rem);
+      z-index: 100;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border-hairline);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.3);
     }
 
-    .header-inner {
-      max-width: 980px;
+    .header-container {
+      max-width: 1360px;
       margin: 0 auto;
+      padding: 0 1.25rem;
+      height: 52px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 1.25rem;
-      flex-wrap: wrap;
+      gap: 1rem;
     }
 
-    .brand-wrap {
+    .brand-section {
       display: flex;
       align-items: center;
       gap: 0.75rem;
     }
 
-    .brand-logo {
-      width: 36px;
-      height: 36px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, #6366f1 0%, #06b6d4 100%);
+    .brand-mark {
+      width: 26px;
+      height: 26px;
+      background: linear-gradient(135deg, #1e293b, #0f172a);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-weight: 800;
-      color: #fff;
-      font-size: 1.15rem;
-      box-shadow: 0 0 16px var(--primary-glow);
-    }
-
-    .brand-text {
-      font-size: 1.15rem;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      gap: 0.45rem;
-    }
-
-    .version-tag {
-      font-size: 0.65rem;
       font-family: var(--font-mono);
-      padding: 0.15rem 0.45rem;
-      border-radius: 9999px;
-      background: rgba(99, 102, 241, 0.15);
-      color: #818cf8;
-      border: 1px solid rgba(99, 102, 241, 0.3);
+      font-weight: 700;
+      color: #38bdf8;
+      font-size: 13px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.4);
     }
 
-    /* Navigation Tabs */
-    .nav-tabs {
-      display: flex;
-      align-items: center;
-      gap: 0.35rem;
-      background: rgba(255, 255, 255, 0.03);
-      padding: 0.25rem;
-      border-radius: 9999px;
-      border: 1px solid var(--border-subtle);
-    }
-
-    .tab-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-      padding: 0.4rem 0.95rem;
-      border-radius: 9999px;
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: var(--text-muted);
-      background: transparent;
-      border: none;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    .tab-btn:hover {
-      color: #fff;
-      background: rgba(255, 255, 255, 0.05);
-    }
-
-    .tab-btn.active {
-      background: var(--primary);
-      color: #fff;
-      box-shadow: 0 0 14px var(--primary-glow);
-    }
-
-    .header-pills {
-      display: flex;
-      align-items: center;
-      gap: 0.65rem;
-    }
-
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.45rem;
-      padding: 0.3rem 0.75rem;
-      border-radius: 9999px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-muted);
-    }
-
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #10b981;
-      box-shadow: 0 0 8px #10b981;
-    }
-
-    /* Main Container */
-    main {
-      max-width: 980px;
-      margin: 0 auto;
-      padding: 1.75rem clamp(1rem, 3vw, 2rem);
-    }
-
-    /* Page Switcher Animation */
-    .page-section {
-      display: none;
-      animation: fadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-      flex-direction: column;
-      gap: 1.5rem;
-    }
-
-    .page-section.active {
-      display: flex;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(6px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    /* Clean Card Container */
-    .card {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-xl);
-      padding: clamp(1.25rem, 3vw, 1.75rem);
-      box-shadow: var(--shadow-card);
-      display: flex;
-      flex-direction: column;
-      gap: 1.25rem;
-    }
-
-    .card-header-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 0.75rem;
-    }
-
-    .page-title {
-      font-size: 1.15rem;
-      font-weight: 800;
-      color: #fff;
+    .brand-meta {
       display: flex;
       align-items: center;
       gap: 0.5rem;
     }
 
-    .page-subtitle {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      margin-top: 0.2rem;
-    }
-
-    /* 1. LIMITS PAGE */
-    .account-switcher-pills {
-      display: flex;
-      gap: 0.4rem;
-      flex-wrap: wrap;
-    }
-
-    .acc-switcher-btn {
-      padding: 0.3rem 0.75rem;
-      border-radius: 9999px;
-      font-size: 0.74rem;
-      font-weight: 600;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-muted);
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .acc-switcher-btn:hover {
-      border-color: var(--border-highlight);
+    .brand-name {
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: -0.02em;
       color: #fff;
     }
 
-    .acc-switcher-btn.active {
-      background: rgba(99, 102, 241, 0.15);
-      border-color: rgba(99, 102, 241, 0.5);
-      color: #818cf8;
-      box-shadow: 0 0 12px rgba(99, 102, 241, 0.2);
+    .badge-env {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 1px 6px;
+      border-radius: var(--radius-xs);
+      background: rgba(56, 189, 248, 0.1);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.25);
     }
 
-    .limits-grid {
+    /* TABS SEGMENTED CONTROL */
+    nav.app-tabs {
+      display: flex;
+      align-items: center;
+      background: var(--bg-input);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--radius-sm);
+      padding: 2px;
+      gap: 2px;
+    }
+
+    .tab-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.35rem 0.8rem;
+      border-radius: var(--radius-xs);
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.12s ease;
+      font-family: var(--font-sans);
+    }
+
+    .tab-item svg {
+      width: 14px;
+      height: 14px;
+      stroke-width: 2;
+      color: var(--text-tertiary);
+      transition: color 0.12s ease;
+    }
+
+    .tab-item:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .tab-item:hover svg {
+      color: var(--text-secondary);
+    }
+
+    .tab-item.active {
+      background: var(--bg-surface-elevated);
+      color: #fff;
+      font-weight: 600;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 0 0 1px var(--border-hairline);
+    }
+
+    .tab-item.active svg {
+      color: #38bdf8;
+    }
+
+    /* TELEMETRY HEADER STATUS CHIPS */
+    .header-status-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.25rem 0.65rem;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      font-weight: 500;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-hairline);
+      color: var(--text-secondary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .pulse-dot {
+      width: 6.5px;
+      height: 6.5px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 6px var(--success);
+      animation: pulse-glow 2.5s infinite ease-in-out;
+    }
+
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.45; transform: scale(0.85); }
+    }
+
+    /* APP SUB-BAR / METRIC STRIP */
+    .metric-strip {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-hairline);
+      padding: 0.65rem 0;
+    }
+
+    .metric-strip-inner {
+      max-width: 1360px;
+      margin: 0 auto;
+      padding: 0 1.25rem;
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      grid-template-columns: repeat(4, 1fr);
       gap: 1.25rem;
     }
 
-    .category-title {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      font-size: 0.92rem;
-      font-weight: 700;
-      color: #e2e8f0;
-      margin-bottom: 0.65rem;
-    }
-
-    .limit-box {
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-lg);
-      padding: 1.25rem;
+    .strip-card {
       display: flex;
       flex-direction: column;
-      gap: 1.2rem;
+      gap: 0.15rem;
+      padding: 0.35rem 0.75rem;
+      border-left: 2px solid var(--border-subtle);
     }
 
-    .limit-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-    }
+    .strip-card.accent-primary { border-color: #38bdf8; }
+    .strip-card.accent-success { border-color: var(--success); }
+    .strip-card.accent-warning { border-color: var(--warning); }
+    .strip-card.accent-neutral { border-color: var(--text-tertiary); }
 
-    .limit-text {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-      flex: 1;
-    }
-
-    .limit-name {
-      font-size: 0.88rem;
+    .strip-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-tertiary);
       font-weight: 600;
-      color: #f1f5f9;
     }
 
-    .limit-desc {
-      font-size: 0.76rem;
-      color: #94a3b8;
-      line-height: 1.35;
-    }
-
-    .limit-gauge {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      flex-shrink: 0;
-    }
-
-    .pct-label {
-      font-size: 1.15rem;
+    .strip-value {
+      font-size: 15px;
       font-weight: 700;
-      font-family: var(--font-mono);
-      color: #f8fafc;
-      min-width: 44px;
-      text-align: right;
-    }
-
-    .circle-gauge {
-      width: 36px;
-      height: 36px;
-      transform: rotate(-90deg);
-    }
-
-    .circle-bg {
-      fill: none;
-      stroke: #1e293b;
-      stroke-width: 3.8;
-    }
-
-    .circle-fg {
-      fill: none;
-      stroke-width: 3.8;
-      stroke-linecap: round;
-      transition: stroke-dasharray 0.5s ease;
-    }
-
-    /* 2. MODELS & TEST PAGE */
-    .models-test-grid {
+      color: var(--text-primary);
       display: flex;
+      align-items: baseline;
+      gap: 0.35rem;
+      font-family: var(--font-sans);
+    }
+
+    .strip-sub {
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+    }
+
+    /* MAIN CONTENT WORKBENCH */
+    main.app-main {
+      max-width: 1360px;
+      margin: 0 auto;
+      padding: 1.5rem 1.25rem 3rem 1.25rem;
+    }
+
+    .view-container {
+      display: none;
       flex-direction: column;
-      gap: 0.65rem;
+      gap: 1.5rem;
+      animation: fadeIn 0.15s ease-out;
     }
 
-    .model-test-card {
+    .view-container.active {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0.95rem 1.25rem;
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-lg);
-      gap: 1rem;
-      transition: border-color 0.2s;
     }
 
-    .model-test-card:hover {
-      border-color: var(--border-highlight);
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(3px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
-    .model-info-col {
-      display: flex;
-      align-items: center;
-      gap: 0.85rem;
-      flex: 1;
-    }
-
-    .model-name-text {
-      font-size: 0.92rem;
-      font-weight: 700;
-      color: #fff;
-    }
-
-    .model-id-text {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--text-faint);
-    }
-
-    .model-tier-badge {
-      display: inline-block;
-      padding: 0.18rem 0.5rem;
-      border-radius: 6px;
-      font-size: 0.68rem;
-      font-weight: 700;
-      font-family: var(--font-mono);
-    }
-
-    .tier-claude { background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
-    .tier-gemini { background: rgba(6, 182, 212, 0.12); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); }
-    .tier-pro { background: rgba(168, 85, 247, 0.12); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
-    .tier-gpt { background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
-
-    .model-status-col {
-      display: flex;
-      align-items: center;
-      gap: 0.85rem;
-    }
-
-    .test-result-badge {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: var(--text-muted);
-      min-width: 90px;
-      text-align: right;
-    }
-
-    .test-result-badge.ok { color: #34d399; }
-    .test-result-badge.err { color: #fb7185; }
-    .test-result-badge.testing { color: #818cf8; animation: pulse 1s infinite; }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-
-    /* 3. ACCOUNTS PAGE */
-    .priority-banner {
-      background: rgba(99, 102, 241, 0.08);
-      border: 1px solid rgba(99, 102, 241, 0.2);
+    /* WORKBENCH SECTION PANEL */
+    .panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-hairline);
       border-radius: var(--radius-md);
-      padding: 0.75rem 1rem;
-      font-size: 0.8rem;
-      color: #c7d2fe;
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-      line-height: 1.4;
+      box-shadow: var(--shadow-surface);
+      overflow: hidden;
     }
 
-    .account-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0.65rem;
-    }
-
-    .account-card {
+    .panel-header {
+      padding: 0.9rem 1.25rem;
+      border-bottom: 1px solid var(--border-hairline);
+      background: rgba(255, 255, 255, 0.015);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0.95rem 1.25rem;
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-lg);
-      gap: 1rem;
-      cursor: grab;
-      user-select: none;
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      flex-wrap: wrap;
+      gap: 0.75rem;
     }
 
-    .account-card:active { cursor: grabbing; }
-
-    .account-card.dragging {
-      opacity: 0.45;
-      transform: scale(0.98);
-      border-color: var(--primary) !important;
-      box-shadow: 0 10px 25px var(--primary-glow);
-    }
-
-    .account-main-info {
-      display: flex;
-      align-items: center;
-      gap: 0.85rem;
-      flex: 1;
-    }
-
-    .drag-handle {
-      color: #64748b;
-      font-size: 1.15rem;
-      display: flex;
-      align-items: center;
-      cursor: grab;
-      transition: color 0.2s;
-    }
-
-    .account-card:hover .drag-handle { color: #cbd5e1; }
-
-    .avatar {
-      width: 38px;
-      height: 38px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, #1e293b, #0f172a);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      color: #cbd5e1;
-      font-size: 1rem;
-      flex-shrink: 0;
-    }
-
-    .account-text-wrap {
+    .panel-title-group {
       display: flex;
       flex-direction: column;
       gap: 0.2rem;
     }
 
-    .account-email-row {
+    .panel-heading {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      flex-wrap: wrap;
     }
 
-    .email-title {
-      font-size: 0.92rem;
-      font-weight: 700;
-      color: #f8fafc;
+    .panel-caption {
+      font-size: 12px;
+      color: var(--text-secondary);
     }
 
-    .meta-subtitle {
-      font-size: 0.74rem;
-      color: var(--text-muted);
-      display: flex;
-      align-items: center;
-      gap: 0.45rem;
+    .panel-body {
+      padding: 1.25rem;
     }
 
-    .priority-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      padding: 0.15rem 0.5rem;
-      border-radius: 9999px;
-      font-size: 0.68rem;
-      font-weight: 700;
-    }
-
-    .priority-badge.primary {
-      background: rgba(99, 102, 241, 0.15);
-      border: 1px solid rgba(99, 102, 241, 0.45);
-      color: #a5b4fc;
-    }
-
-    .priority-badge.fallback {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      color: #94a3b8;
-    }
-
-    .add-token-row {
-      display: flex;
-      gap: 0.6rem;
-      margin-top: 0.4rem;
-    }
-
-    .token-input {
-      flex: 1;
-      padding: 0.7rem 0.95rem;
-      border-radius: var(--radius-md);
-      background: var(--bg-input);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-main);
-      font-family: var(--font-mono);
-      font-size: 0.82rem;
-      outline: none;
-    }
-
-    .token-input:focus {
-      border-color: var(--border-focus);
-    }
-
-    /* 4. INTEGRATION PAGE */
-    .tab-pills {
-      display: flex;
-      gap: 0.4rem;
-      flex-wrap: wrap;
-    }
-
-    .chip {
-      padding: 0.35rem 0.75rem;
-      border-radius: 9999px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-muted);
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .chip:hover {
-      border-color: var(--border-highlight);
-      color: #fff;
-    }
-
-    .chip.active {
-      background: rgba(99, 102, 241, 0.15);
-      border-color: rgba(99, 102, 241, 0.5);
-      color: #818cf8;
-    }
-
-    .code-container {
-      position: relative;
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-      overflow: hidden;
-    }
-
-    .code-content {
-      padding: 1.15rem;
-      font-family: var(--font-mono);
-      font-size: 0.82rem;
-      color: #e2e8f0;
-      line-height: 1.6;
-      white-space: pre-wrap;
-      overflow-x: auto;
-    }
-
-    .copy-btn {
-      position: absolute;
-      top: 0.75rem;
-      right: 0.75rem;
-      padding: 0.35rem 0.75rem;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid var(--border-subtle);
-      border-radius: 6px;
-      color: var(--text-muted);
-      font-size: 0.75rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .copy-btn:hover {
-      background: rgba(255, 255, 255, 0.15);
-      color: #fff;
-    }
-
-    /* Common Buttons */
+    /* BUTTONS */
     .btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 0.45rem;
-      padding: 0.5rem 0.95rem;
-      border-radius: var(--radius-md);
-      font-size: 0.8rem;
-      font-weight: 600;
+      padding: 0.4rem 0.85rem;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 500;
+      font-family: var(--font-sans);
       cursor: pointer;
-      border: none;
-      transition: all 0.2s;
+      border: 1px solid transparent;
+      transition: all 0.12s ease;
       white-space: nowrap;
+      text-decoration: none;
+    }
+
+    .btn svg {
+      width: 14px;
+      height: 14px;
+      stroke-width: 2;
     }
 
     .btn-primary {
-      background: var(--primary);
+      background: var(--accent);
       color: #fff;
-      box-shadow: 0 4px 14px var(--primary-glow);
+      border-color: rgba(255, 255, 255, 0.15);
     }
 
     .btn-primary:hover {
-      background: var(--primary-hover);
-      transform: translateY(-1px);
+      background: var(--accent-hover);
+      box-shadow: 0 1px 4px rgba(37, 99, 235, 0.4);
     }
 
     .btn-secondary {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-main);
+      background: var(--bg-surface-elevated);
+      color: var(--text-primary);
+      border-color: var(--border-subtle);
     }
 
     .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.1);
+      background: var(--bg-surface-hover);
+      border-color: rgba(255, 255, 255, 0.25);
     }
 
-    .btn-test {
-      background: rgba(99, 102, 241, 0.12);
-      border: 1px solid rgba(99, 102, 241, 0.3);
-      color: #a5b4fc;
-      padding: 0.35rem 0.75rem;
-      font-size: 0.75rem;
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-secondary);
+      border-color: var(--border-hairline);
     }
 
-    .btn-test:hover {
-      background: rgba(99, 102, 241, 0.25);
+    .btn-ghost:hover {
       color: #fff;
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--border-subtle);
     }
 
-    .btn-danger {
-      background: rgba(244, 63, 94, 0.1);
-      border: 1px solid rgba(244, 63, 94, 0.2);
-      color: #fb7185;
+    .btn-danger-ghost {
+      background: transparent;
+      color: var(--danger-text);
+      border-color: var(--danger-border);
+      padding: 0.25rem 0.6rem;
+      font-size: 11.5px;
+    }
+
+    .btn-danger-ghost:hover {
+      background: var(--danger-subtle);
+      border-color: var(--danger);
+    }
+
+    /* 1. LIMITS & QUOTA VIEW */
+    .account-switcher-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      padding: 0.6rem 1.25rem;
+      background: var(--bg-surface-elevated);
+      border-bottom: 1px solid var(--border-hairline);
+    }
+
+    .switcher-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-tertiary);
+      margin-right: 0.25rem;
+    }
+
+    .account-pill-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
       padding: 0.35rem 0.75rem;
-      font-size: 0.75rem;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      font-weight: 500;
+      background: var(--bg-canvas);
+      border: 1px solid var(--border-hairline);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.12s ease;
     }
 
-    .btn-danger:hover {
-      background: rgba(244, 63, 94, 0.2);
+    .account-pill-btn:hover {
+      color: var(--text-primary);
+      border-color: var(--border-subtle);
     }
 
-    /* Toast */
-    #toast {
-      position: fixed;
-      bottom: 2rem;
-      right: 2rem;
-      background: #1e293b;
-      color: #fff;
-      padding: 0.75rem 1.25rem;
-      border-radius: var(--radius-md);
-      border: 1px solid rgba(99, 102, 241, 0.4);
-      font-size: 0.82rem;
+    .account-pill-btn.active {
+      background: var(--accent-subtle);
+      border-color: rgba(59, 130, 246, 0.5);
+      color: #93c5fd;
       font-weight: 600;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 16px var(--primary-glow);
-      transform: translateY(80px);
-      opacity: 0;
-      transition: all 0.25s ease;
-      z-index: 1000;
     }
 
-    #toast.show {
+    .account-pill-btn .slot-tag {
+      font-size: 9.5px;
+      padding: 1px 4px;
+      border-radius: var(--radius-xs);
+      background: rgba(255,255,255,0.06);
+      color: var(--text-tertiary);
+    }
+
+    .account-pill-btn.active .slot-tag {
+      background: rgba(59, 130, 246, 0.25);
+      color: #bfdbfe;
+    }
+
+    .quota-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .quota-category-card {
+      background: var(--bg-canvas);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--radius-sm);
+      padding: 1.15rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .category-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 0.5rem;
+      border-bottom: 1px solid var(--border-hairline);
+      padding-bottom: 0.65rem;
+    }
+
+    .category-name {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .category-models-hint {
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      margin-top: 0.1rem;
+    }
+
+    .quota-bucket-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1.1rem;
+    }
+
+    .bucket-row {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .bucket-meta-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.75rem;
+    }
+
+    .bucket-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .bucket-title {
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .bucket-window-badge {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      text-transform: uppercase;
+      padding: 1px 5px;
+      border-radius: var(--radius-xs);
+      background: var(--bg-surface-elevated);
+      color: var(--text-tertiary);
+      border: 1px solid var(--border-hairline);
+    }
+
+    .bucket-fraction {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Precision Meter Gauge */
+    .precision-meter-track {
+      width: 100%;
+      height: 8px;
+      background: #080a0d;
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1px solid var(--border-hairline);
+      position: relative;
+    }
+
+    .precision-meter-bar {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.35s ease;
+    }
+
+    .bucket-subtext-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: var(--text-tertiary);
+      font-family: var(--font-mono);
+    }
+
+    .bucket-desc {
+      color: var(--text-secondary);
+    }
+
+    .bucket-reset-time {
+      color: var(--text-tertiary);
+      white-space: nowrap;
+    }
+
+    .quota-info-callout {
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-hairline);
+      border-left: 3px solid #38bdf8;
+      border-radius: var(--radius-sm);
+      padding: 0.85rem 1rem;
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* 2. MODELS & HEALTH VIEW */
+    .table-container {
+      overflow-x: auto;
+    }
+
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    table.data-table th {
+      background: var(--bg-surface-elevated);
+      padding: 0.65rem 1rem;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid var(--border-hairline);
+      white-space: nowrap;
+    }
+
+    table.data-table td {
+      padding: 0.8rem 1rem;
+      border-bottom: 1px solid var(--border-hairline);
+      vertical-align: middle;
+      font-size: 12.5px;
+    }
+
+    table.data-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    table.data-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .provider-tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 7px;
+      border-radius: var(--radius-xs);
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .provider-gemini {
+      background: rgba(56, 189, 248, 0.1);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.25);
+    }
+
+    .provider-pro {
+      background: rgba(168, 85, 247, 0.1);
+      color: #c084fc;
+      border: 1px solid rgba(168, 85, 247, 0.25);
+    }
+
+    .provider-claude {
+      background: rgba(245, 158, 11, 0.1);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.25);
+    }
+
+    .provider-gpt {
+      background: rgba(16, 185, 129, 0.1);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+
+    .model-primary-name {
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .model-code-id {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      background: rgba(255, 255, 255, 0.04);
+      padding: 1px 5px;
+      border-radius: var(--radius-xs);
+      border: 1px solid var(--border-hairline);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .badge-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+      padding: 2px 7px;
+      border-radius: var(--radius-xs);
+    }
+
+    .badge-status.idle {
+      color: var(--text-tertiary);
+      background: transparent;
+    }
+
+    .badge-status.testing {
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+    }
+
+    .badge-status.ok {
+      color: var(--success);
+      background: var(--success-subtle);
+      border: 1px solid var(--success-border);
+    }
+
+    .badge-status.err {
+      color: var(--danger);
+      background: var(--danger-subtle);
+      border: 1px solid var(--danger-border);
+    }
+
+    /* DIAGNOSTIC CONSOLE TICKER */
+    .diagnostic-terminal {
+      background: #06080a;
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--radius-sm);
+      margin-top: 1rem;
+      overflow: hidden;
+    }
+
+    .terminal-header {
+      padding: 0.5rem 0.85rem;
+      background: #0c0f14;
+      border-bottom: 1px solid var(--border-hairline);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+
+    .terminal-body {
+      padding: 0.75rem 1rem;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-code);
+      max-height: 140px;
+      overflow-y: auto;
+      line-height: 1.6;
+    }
+
+    .terminal-line {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .term-time { color: var(--text-tertiary); }
+    .term-ok { color: var(--success-text); }
+    .term-err { color: var(--danger-text); }
+
+    /* 3. ACCOUNTS VIEW */
+    .routing-banner {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.85rem 1.15rem;
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--radius-sm);
+      margin-bottom: 1rem;
+    }
+
+    .routing-flow-diagram {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-secondary);
+      flex-wrap: wrap;
+    }
+
+    .routing-node {
+      padding: 2px 7px;
+      background: var(--bg-canvas);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--radius-xs);
+      color: var(--text-primary);
+    }
+
+    .routing-node.active-primary {
+      border-color: rgba(16, 185, 129, 0.4);
+      color: var(--success-text);
+      background: var(--success-subtle);
+      font-weight: 600;
+    }
+
+    .routing-arrow {
+      color: var(--text-tertiary);
+    }
+
+    .account-cards-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+
+    .account-row-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.85rem 1.15rem;
+      background: var(--bg-canvas);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--radius-sm);
+      gap: 1rem;
+      cursor: grab;
+      user-select: none;
+      transition: border-color 0.12s ease, transform 0.12s ease;
+    }
+
+    .account-row-item:hover {
+      border-color: var(--border-subtle);
+    }
+
+    .account-row-item:active {
+      cursor: grabbing;
+    }
+
+    .account-row-item.dragging {
+      opacity: 0.4;
+      border-color: #38bdf8;
+      background: var(--bg-surface-hover);
+    }
+
+    .account-left-info {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .drag-grippy {
+      color: var(--text-tertiary);
+      display: flex;
+      align-items: center;
+      cursor: grab;
+      padding: 4px;
+    }
+
+    .account-slot-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 2px 6px;
+      border-radius: var(--radius-xs);
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      white-space: nowrap;
+    }
+
+    .account-slot-badge.primary {
+      background: var(--success-subtle);
+      border: 1px solid var(--success-border);
+      color: var(--success-text);
+    }
+
+    .account-slot-badge.standby {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-hairline);
+      color: var(--text-secondary);
+    }
+
+    .account-email-label {
+      font-weight: 600;
+      font-size: 13.5px;
+      color: #fff;
+    }
+
+    .account-project-id {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+
+    .account-right-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .add-account-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 1.25rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--border-hairline);
+    }
+
+    .add-method-box {
+      background: var(--bg-canvas);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--radius-sm);
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 0.85rem;
+    }
+
+    .method-title {
+      font-weight: 600;
+      font-size: 13px;
+      color: #fff;
+    }
+
+    .method-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    .token-input-group {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .token-input-field {
+      flex: 1;
+      padding: 0.45rem 0.75rem;
+      border-radius: var(--radius-sm);
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.12s ease;
+    }
+
+    .token-input-field:focus {
+      border-color: var(--border-focus);
+    }
+
+    /* 4. INTEGRATION VIEW */
+    .integration-layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+
+    .integration-sidebar {
+      background: var(--bg-surface-elevated);
+      border-right: 1px solid var(--border-hairline);
+      padding: 0.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .snippet-nav-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.55rem 0.75rem;
+      border-radius: var(--radius-xs);
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.12s ease;
+      font-family: var(--font-sans);
+    }
+
+    .snippet-nav-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .snippet-nav-btn.active {
+      background: var(--bg-canvas);
+      color: #fff;
+      font-weight: 600;
+      border: 1px solid var(--border-hairline);
+    }
+
+    .snippet-nav-btn.active::after {
+      content: "›";
+      font-family: var(--font-mono);
+      color: #38bdf8;
+      font-size: 14px;
+    }
+
+    .code-workbench {
+      position: relative;
+      background: #07090d;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .code-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 1rem;
+      background: #0d1016;
+      border-bottom: 1px solid var(--border-hairline);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+
+    .code-block-content {
+      padding: 1rem 1.25rem;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: #e2e8f0;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      overflow-x: auto;
+      margin: 0;
+    }
+
+    /* TOAST NOTIFICATION */
+    #toast-notification {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      background: var(--bg-surface-elevated);
+      color: #fff;
+      padding: 0.65rem 1.15rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+      font-size: 12.5px;
+      font-weight: 500;
+      box-shadow: var(--shadow-elevated);
+      transform: translateY(50px);
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    #toast-notification.visible {
       transform: translateY(0);
       opacity: 1;
+      pointer-events: auto;
+    }
+
+    @media (max-width: 900px) {
+      .metric-strip-inner {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .quota-grid {
+        grid-template-columns: 1fr;
+      }
+      .integration-layout {
+        grid-template-columns: 1fr;
+      }
+      .integration-sidebar {
+        border-right: none;
+        border-bottom: 1px solid var(--border-hairline);
+        flex-direction: row;
+        overflow-x: auto;
+      }
+      .add-account-grid {
+        grid-template-columns: 1fr;
+      }
+      .header-container {
+        height: auto;
+        padding: 0.75rem 1rem;
+        flex-wrap: wrap;
+      }
+      nav.app-tabs {
+        order: 3;
+        width: 100%;
+        justify-content: space-between;
+      }
     }
   </style>
 </head>
 <body>
 
-  <!-- Clean Top Header with Tabbed Pages -->
-  <header>
-    <div class="header-inner">
-      <div class="brand-wrap">
-        <div class="brand-logo">α</div>
-        <div class="brand-text">
-          <span>AntiAPI</span>
-          <span class="version-tag">v2.0</span>
+  <!-- TOP UTILITY APPLICATION BAR -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand-section">
+        <div class="brand-mark">α</div>
+        <div class="brand-meta">
+          <span class="brand-name">AntiAPI</span>
+          <span class="badge-env">local :8964</span>
         </div>
       </div>
 
-      <!-- Multiple Pages Navigation -->
-      <nav class="nav-tabs">
-        <button class="tab-btn active" onclick="switchPage('limits')" id="btn-tab-limits">📊 Limits</button>
-        <button class="tab-btn" onclick="switchPage('models')" id="btn-tab-models">🧠 Models & Test</button>
-        <button class="tab-btn" onclick="switchPage('accounts')" id="btn-tab-accounts">👥 Accounts</button>
-        <button class="tab-btn" onclick="switchPage('integration')" id="btn-tab-integration">🔌 Integration</button>
+      <!-- NAVIGATION TABS -->
+      <nav class="app-tabs" aria-label="Workbench navigation">
+        <button class="tab-item active" onclick="switchPage('limits')" id="tab-btn-limits">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          Telemetry & Quotas
+        </button>
+        <button class="tab-item" onclick="switchPage('models')" id="tab-btn-models">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          Models & Health
+        </button>
+        <button class="tab-item" onclick="switchPage('accounts')" id="tab-btn-accounts">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Account Pool
+        </button>
+        <button class="tab-item" onclick="switchPage('integration')" id="tab-btn-integration">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          Client Integration
+        </button>
       </nav>
 
-      <div class="header-pills">
-        <div class="pill">
-          <span class="status-dot"></span>
-          <span id="header-latency">Gateway Live</span>
+      <!-- SYSTEM STATUS INDICATORS -->
+      <div class="header-status-group">
+        <div class="status-chip" title="Gateway connection state">
+          <span class="pulse-dot"></span>
+          <span id="gateway-status-text">Live</span>
         </div>
-        <div class="pill" id="header-acc-count">
-          2 Accounts Active
+        <div class="status-chip" id="latency-chip" title="Ping latency to local gateway">
+          <span style="color: var(--text-tertiary);">RTT</span>
+          <span id="header-latency-val" style="color: var(--text-primary);">--ms</span>
+        </div>
+        <div class="status-chip" id="pool-chip" title="Active Google Cloud Code accounts">
+          <span id="header-pool-val">3 Accounts</span>
         </div>
       </div>
     </div>
   </header>
 
-  <main>
-    <!-- PAGE 1: OFFICIAL LIMITS -->
-    <div class="page-section active" id="page-limits">
-      <section class="card">
-        <div class="card-header-row">
-          <div>
-            <div class="page-title">Official Antigravity Rate Limits</div>
-            <div class="page-subtitle">Direct live sync via Google Cloud Code PA</div>
+  <!-- QUICK METRIC STRIP -->
+  <section class="metric-strip">
+    <div class="metric-strip-inner">
+      <div class="strip-card accent-primary">
+        <span class="strip-label">Primary Route</span>
+        <div class="strip-value" id="strip-primary-email">--</div>
+        <span class="strip-sub">Slot 1 · Active Upstream</span>
+      </div>
+      <div class="strip-card accent-success">
+        <span class="strip-label">Failover Engine</span>
+        <div class="strip-value">Ready <span style="font-size: 12px; font-weight: normal; color: var(--success);">(Auto-Shift)</span></div>
+        <span class="strip-sub">Transparent HTTP 429 Recovery</span>
+      </div>
+      <div class="strip-card accent-warning">
+        <span class="strip-label">Production Models</span>
+        <div class="strip-value">8 Endpoints</div>
+        <span class="strip-sub">Gemini 3.8 / Claude / GPT-OSS</span>
+      </div>
+      <div class="strip-card accent-neutral">
+        <span class="strip-label">Local Proxy Port</span>
+        <div class="strip-value">127.0.0.1:8964</div>
+        <span class="strip-sub">OpenAI Compatible API</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- MAIN APPLICATION CONTENT -->
+  <main class="app-main">
+
+    <!-- VIEW 1: RATE LIMITS & QUOTA TELEMETRY -->
+    <div class="view-container active" id="view-limits">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <h1 class="panel-heading">Upstream Quota Telemetry</h1>
+            <p class="panel-caption">Real-time capacity tracking synchronized with Google Cloud Code Allocation API</p>
           </div>
-          <div class="account-switcher-pills" id="quota-account-pills">
-            <!-- Populated dynamically -->
-          </div>
+          <button class="btn btn-ghost" onclick="loadStatus()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Sync Now
+          </button>
         </div>
 
-        <div class="limits-grid" id="quota-limits-container">
-          <div style="color: var(--text-muted); padding: 1.25rem; background: #080b11; border-radius: 12px; font-size: 0.85rem;">
-            Fetching live Google Cloud Code quota summary...
+        <!-- Account Selector Bar -->
+        <div class="account-switcher-bar">
+          <span class="switcher-label">Select Upstream:</span>
+          <div id="quota-account-buttons" style="display: flex; gap: 0.4rem; flex-wrap: wrap;"></div>
+        </div>
+
+        <div class="panel-body">
+          <div class="quota-grid" id="quota-cards-container">
+            <div style="color: var(--text-secondary); font-family: var(--font-mono); font-size: 12px; padding: 1rem;">
+              Querying live quota status...
+            </div>
+          </div>
+
+          <div class="quota-info-callout" style="margin-top: 1.25rem;" id="quota-policy-text">
+            Models within each group share rolling weekly allocations and 5-hour burst windows. Quota is consumed proportionally to the model cost tier. The 5-hour limit smooths peak aggregate demand while the weekly limit tracks individual tier capacity.
           </div>
         </div>
-      </section>
+      </div>
     </div>
 
-    <!-- PAGE 2: CURATED MODELS & TEST -->
-    <div class="page-section" id="page-models">
-      <section class="card">
-        <div class="card-header-row">
-          <div>
-            <div class="page-title">Curated Models & Health Verification</div>
-            <div class="page-subtitle">8 production models • Click to ping and verify reachability</div>
+    <!-- VIEW 2: MODELS & HEALTH VERIFICATION -->
+    <div class="view-container" id="view-models">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <h1 class="panel-heading">Curated Endpoints & Health Matrix</h1>
+            <p class="panel-caption">8 production models mapped to Google Cloud Code backend · End-to-end round trip test</p>
           </div>
-          <button class="btn btn-primary" onclick="testAllModels()">⚡ Test All Models</button>
+          <button class="btn btn-primary" onclick="testAllModels()" id="btn-test-all">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            Test All Endpoints
+          </button>
         </div>
 
-        <div class="models-test-grid" id="models-test-list">
-          <!-- Rendered dynamically -->
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Tier / Provider</th>
+                <th>Model Name</th>
+                <th>Model Identifier</th>
+                <th>Status / Ping Latency</th>
+                <th style="text-align: right;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="models-table-body">
+              <!-- Dynamically Populated -->
+            </tbody>
+          </table>
         </div>
-      </section>
+
+        <!-- Terminal Output Log -->
+        <div style="padding: 0 1.25rem 1.25rem 1.25rem;">
+          <div class="diagnostic-terminal">
+            <div class="terminal-header">
+              <span>Diagnostic Ping Console</span>
+              <span id="term-status-tag">Ready</span>
+            </div>
+            <div class="terminal-body" id="diagnostic-log-body">
+              <div class="terminal-line"><span class="term-time">[SYSTEM]</span><span>Gateway listening on http://127.0.0.1:8964. Ready for health verification.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- PAGE 3: ACCOUNTS POOL & PRIORITY -->
-    <div class="page-section" id="page-accounts">
-      <section class="card">
-        <div class="card-header-row">
-          <div>
-            <div class="page-title">Google Account Pool (<span id="pool-count">2</span>)</div>
-            <div class="page-subtitle">Drag cards to set priority order. Priority 1 is used first.</div>
+    <!-- VIEW 3: ACCOUNT POOL & FAILOVER -->
+    <div class="view-container" id="view-accounts">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <h1 class="panel-heading">Account Pool & Priority Failover (<span id="account-pool-total">0</span>)</h1>
+            <p class="panel-caption">Drag cards to reorder priority. Slot 1 receives traffic; automatic failover to Slot 2+ occurs upon HTTP 429 quota exhaustion.</p>
           </div>
-          <button class="btn btn-primary" onclick="window.open('/oauth/login', '_blank')">+ Add via Google</button>
+          <button class="btn btn-primary" onclick="window.open('/oauth/login', '_blank')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            OAuth Add Account
+          </button>
         </div>
 
-        <div class="priority-banner">
-          <span>💡</span>
-          <div>
-            <strong>Automatic Priority Failover:</strong> All requests go to Priority 1. If it hits limits or 429 quota exhaustion, traffic automatically switches to the next account.
+        <div class="panel-body">
+          <!-- Flow diagram banner -->
+          <div class="routing-banner">
+            <div class="routing-flow-diagram">
+              <span style="font-weight: 600; color: #fff;">ROUTING:</span>
+              <span class="routing-node">Client Request</span>
+              <span class="routing-arrow">→</span>
+              <span class="routing-node">AntiAPI Proxy (:8964)</span>
+              <span class="routing-arrow">→</span>
+              <span class="routing-node active-primary" id="flow-primary-node">Slot 1 (Primary)</span>
+              <span class="routing-arrow">⇢ (429) ⇢</span>
+              <span class="routing-node">Slot 2+ (Hot Standby)</span>
+            </div>
+          </div>
+
+          <!-- Account Card Stack -->
+          <div class="account-cards-stack" id="account-list-stack"></div>
+
+          <!-- Add Account Section -->
+          <div class="add-account-grid">
+            <div class="add-method-box">
+              <div>
+                <div class="method-title">1. Authorize with Google OAuth</div>
+                <p class="method-desc" style="margin-top: 0.35rem;">Log into Google in a new browser tab. The refresh token will be automatically encrypted and injected into the pool.</p>
+              </div>
+              <button class="btn btn-secondary" onclick="window.open('/oauth/login', '_blank')" style="align-self: flex-start;">
+                Launch OAuth Flow
+              </button>
+            </div>
+
+            <div class="add-method-box">
+              <div>
+                <div class="method-title">2. Ingest Refresh Token Manually</div>
+                <p class="method-desc" style="margin-top: 0.35rem;">Provide an existing Google OAuth refresh token directly (starts with <code>1//...</code>).</p>
+              </div>
+              <div class="token-input-group">
+                <input type="password" id="manual-token-input" class="token-input-field" placeholder="Paste 1//... token" />
+                <button class="btn btn-secondary" onclick="submitManualToken()">Save</button>
+              </div>
+            </div>
           </div>
         </div>
-
-        <div class="account-list" id="accounts-container">
-          <!-- Reorderable accounts rendered here -->
-        </div>
-
-        <div class="add-token-row">
-          <input type="password" id="token-input" class="token-input" placeholder="Paste Google Refresh Token (1//...)" />
-          <button class="btn btn-secondary" onclick="addToken()">Add Token</button>
-        </div>
-      </section>
+      </div>
     </div>
 
-    <!-- PAGE 4: CLIENT INTEGRATION -->
-    <div class="page-section" id="page-integration">
-      <section class="card">
-        <div>
-          <div class="page-title">Client Integration & Settings</div>
-          <div class="page-subtitle">Configure Hermes Agent, Cursor, Windsurf, or Python OpenAI SDK</div>
+    <!-- VIEW 4: CLIENT INTEGRATION -->
+    <div class="view-container" id="view-integration">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <h1 class="panel-heading">Client Configuration Matrix</h1>
+            <p class="panel-caption">Drop-in configuration snippets for Hermes Agent, Cursor, Windsurf, and OpenAI SDKs</p>
+          </div>
+          <button class="btn btn-secondary" onclick="copyCurrentSnippet()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copy Snippet
+          </button>
         </div>
 
-        <div class="tab-pills" id="integration-tabs">
-          <span class="chip active" onclick="showSnippet('hermes')">Hermes Agent</span>
-          <span class="chip" onclick="showSnippet('cursor')">Cursor / Windsurf</span>
-          <span class="chip" onclick="showSnippet('python')">Python OpenAI SDK</span>
-          <span class="chip" onclick="showSnippet('curl')">cURL</span>
-        </div>
+        <div class="panel-body" style="padding: 0;">
+          <div class="integration-layout">
+            <div class="integration-sidebar">
+              <button class="snippet-nav-btn active" onclick="activateSnippet('hermes', this)">Hermes Agent</button>
+              <button class="snippet-nav-btn" onclick="activateSnippet('cursor', this)">Cursor / Windsurf</button>
+              <button class="snippet-nav-btn" onclick="activateSnippet('python', this)">Python OpenAI SDK</button>
+              <button class="snippet-nav-btn" onclick="activateSnippet('curl', this)">cURL / CLI</button>
+            </div>
 
-        <div class="code-container">
-          <button class="copy-btn" onclick="copySnippet()">Copy</button>
-          <pre class="code-content" id="snippet-display"></pre>
+            <div class="code-workbench">
+              <div class="code-toolbar">
+                <span id="snippet-filename">~/.hermes/config.yaml</span>
+                <span id="snippet-lang-tag">YAML</span>
+              </div>
+              <pre class="code-block-content" id="active-snippet-text"></pre>
+            </div>
+          </div>
         </div>
-      </section>
+      </div>
     </div>
+
   </main>
 
-  <div id="toast">✓ Done</div>
+  <!-- TOAST FEEDBACK -->
+  <div id="toast-notification">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+    <span id="toast-text">Configuration updated</span>
+  </div>
 
   <script>
-    let activePage = 'limits';
+    // Global State
+    let activeView = 'limits';
     let allQuotaSummaries = {};
     let activeQuotaAccount = '';
+    let currentAccountsList = [];
 
-    function switchPage(pageId) {
-      activePage = pageId;
-      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-      const activeBtn = document.getElementById(`btn-tab-${pageId}`);
+    // View Switching
+    function switchPage(viewId) {
+      activeView = viewId;
+      document.querySelectorAll('.tab-item').forEach(btn => btn.classList.remove('active'));
+      const activeBtn = document.getElementById(`tab-btn-${viewId}`);
       if (activeBtn) activeBtn.classList.add('active');
 
-      document.querySelectorAll('.page-section').forEach(sec => sec.classList.remove('active'));
-      const activeSec = document.getElementById(`page-${pageId}`);
-      if (activeSec) activeSec.classList.add('active');
+      document.querySelectorAll('.view-container').forEach(c => c.classList.remove('active'));
+      const activeContainer = document.getElementById(`view-${viewId}`);
+      if (activeContainer) activeContainer.classList.add('active');
     }
 
-    function showToast(msg) {
-      const t = document.getElementById('toast');
-      t.innerText = msg;
-      t.classList.add('show');
-      setTimeout(() => t.classList.remove('show'), 3000);
+    // Toast Helper
+    function showToast(message) {
+      const toast = document.getElementById('toast-notification');
+      document.getElementById('toast-text').innerText = message;
+      toast.classList.add('visible');
+      setTimeout(() => toast.classList.remove('visible'), 2600);
     }
 
-    // 1. Quota Switcher & Render
+    // Log to Diagnostic Console
+    function logDiagnostic(modelId, statusText, isOk) {
+      const logBody = document.getElementById('diagnostic-log-body');
+      const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false });
+      const row = document.createElement('div');
+      row.className = 'terminal-line';
+      const colorClass = isOk ? 'term-ok' : 'term-err';
+      row.innerHTML = `<span class="term-time">[${timeStr}]</span><span class="${colorClass}">${modelId.padEnd(28, ' ')} ${statusText}</span>`;
+      logBody.appendChild(row);
+      logBody.scrollTop = logBody.scrollHeight;
+    }
+
+    // 1. Quota Telemetry Handling
     function switchQuotaAccount(email) {
       activeQuotaAccount = email;
-      document.querySelectorAll('.acc-switcher-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.email === email);
+      document.querySelectorAll('.account-pill-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.email === email);
       });
-      renderLimits(allQuotaSummaries[email]);
+      renderQuotaTelemetry(allQuotaSummaries[email]);
     }
 
-    function renderLimits(summary) {
-      const container = document.getElementById('quota-limits-container');
+    function formatRelativeDate(isoStr) {
+      if (!isoStr) return '';
+      try {
+        const d = new Date(isoStr);
+        return 'Resets ' + d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+      } catch (e) {
+        return '';
+      }
+    }
+
+    function renderQuotaTelemetry(summary) {
+      const container = document.getElementById('quota-cards-container');
       if (!summary || !summary.groups || summary.groups.length === 0) {
-        container.innerHTML = '<div style="color: var(--text-muted); padding: 1rem; font-size: 0.85rem;">No quota summary available.</div>';
+        container.innerHTML = '<div style="color: var(--text-secondary); padding: 1.5rem; font-family: var(--font-mono); font-size: 12.5px;">No telemetry records available for this upstream account.</div>';
         return;
+      }
+
+      if (summary.description) {
+        document.getElementById('quota-policy-text').innerText = summary.description;
       }
 
       container.innerHTML = '';
 
-      summary.groups.forEach(group => {
-        const block = document.createElement('div');
-
-        const titleDiv = document.createElement('div');
-        titleDiv.className = 'category-title';
-        titleDiv.innerHTML = `<span>${group.displayName}</span> <span class="info-icon" title="${group.description || ''}">ⓘ</span>`;
-        block.appendChild(titleDiv);
-
+      summary.groups.forEach(grp => {
         const card = document.createElement('div');
-        card.className = 'limit-box';
+        card.className = 'quota-category-card';
 
-        (group.buckets || []).forEach(bucket => {
+        const topDiv = document.createElement('div');
+        topDiv.className = 'category-top';
+        topDiv.innerHTML = `
+          <div>
+            <div class="category-name">${grp.displayName}</div>
+            <div class="category-models-hint">${grp.description || ''}</div>
+          </div>
+        `;
+        card.appendChild(topDiv);
+
+        const listDiv = document.createElement('div');
+        listDiv.className = 'quota-bucket-list';
+
+        (grp.buckets || []).forEach(b => {
           const row = document.createElement('div');
-          row.className = 'limit-row';
+          row.className = 'bucket-row';
 
-          const pct = Math.round(bucket.remainingFraction * 100);
+          const pct = Math.round(b.remainingFraction * 100);
           const clamped = Math.max(0, Math.min(100, pct));
 
-          let strokeColor = '#4ade80';
-          if (clamped < 25) strokeColor = '#f43f5e';
-          else if (clamped < 60) strokeColor = '#f59e0b';
+          let color = 'var(--success)';
+          if (clamped < 25) color = 'var(--danger)';
+          else if (clamped < 60) color = 'var(--warning)';
+
+          const resetFormatted = b.resetTime ? formatRelativeDate(b.resetTime) : '';
 
           row.innerHTML = `
-            <div class="limit-text">
-              <div class="limit-name">${bucket.displayName}</div>
-              <div class="limit-desc">${bucket.description}</div>
+            <div class="bucket-meta-row">
+              <div class="bucket-title-wrap">
+                <span class="bucket-title">${b.displayName}</span>
+                <span class="bucket-window-badge">${b.window || 'Window'}</span>
+              </div>
+              <span class="bucket-fraction" style="color: ${color}">${pct}%</span>
             </div>
-            <div class="limit-gauge">
-              <span class="pct-label">${pct}%</span>
-              <svg class="circle-gauge" viewBox="0 0 36 36">
-                <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                <path class="circle-fg" stroke="${strokeColor}" stroke-dasharray="${clamped}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-              </svg>
+            <div class="precision-meter-track">
+              <div class="precision-meter-bar" style="width: ${clamped}%; background: ${color}"></div>
+            </div>
+            <div class="bucket-subtext-row">
+              <span class="bucket-desc">${b.description || 'Proportional token pool'}</span>
+              <span class="bucket-reset-time">${resetFormatted}</span>
             </div>
           `;
-          card.appendChild(row);
+          listDiv.appendChild(row);
         });
 
-        block.appendChild(card);
-        container.appendChild(block);
+        card.appendChild(listDiv);
+        container.appendChild(card);
       });
     }
 
     async function loadStatus() {
       try {
-        const start = performance.now();
+        const t0 = performance.now();
         const res = await fetch('/api/status');
         const data = await res.json();
-        const latency = Math.round(performance.now() - start);
+        const latency = Math.round(performance.now() - t0);
 
-        document.getElementById('header-latency').innerText = `Gateway Live (${latency}ms)`;
+        document.getElementById('header-latency-val').innerText = `${latency}ms`;
 
         if (data.quota_summaries) {
           allQuotaSummaries = data.quota_summaries;
@@ -962,75 +1541,89 @@
             activeQuotaAccount = data.selected_account || emails[0] || '';
           }
 
-          const switcher = document.getElementById('quota-account-pills');
-          switcher.innerHTML = '';
-          emails.forEach(email => {
+          const buttonGroup = document.getElementById('quota-account-buttons');
+          buttonGroup.innerHTML = '';
+          emails.forEach((email, idx) => {
             const btn = document.createElement('button');
-            btn.className = 'acc-switcher-btn' + (email === activeQuotaAccount ? ' active' : '');
+            btn.className = 'account-pill-btn' + (email === activeQuotaAccount ? ' active' : '');
             btn.dataset.email = email;
-            btn.innerText = email;
+            btn.innerHTML = `<span class="slot-tag">#${idx + 1}</span> <span>${email}</span>`;
             btn.onclick = () => switchQuotaAccount(email);
-            switcher.appendChild(btn);
+            buttonGroup.appendChild(btn);
           });
 
-          renderLimits(allQuotaSummaries[activeQuotaAccount]);
+          renderQuotaTelemetry(allQuotaSummaries[activeQuotaAccount]);
         }
 
-        const total = data.total || (data.accounts ? data.accounts.length : 1);
-        document.getElementById('header-acc-count').innerText = `${total} Account${total > 1 ? 's' : ''} Active`;
-        document.getElementById('pool-count').innerText = total;
+        const totalAccs = data.total || (data.accounts ? data.accounts.length : 0);
+        document.getElementById('header-pool-val').innerText = `${totalAccs} Account${totalAccs === 1 ? '' : 's'}`;
+        document.getElementById('account-pool-total').innerText = totalAccs;
+
+        const firstEmail = (data.accounts && data.accounts.length > 0) ? data.accounts[0] : (data.selected_account || '--');
+        document.getElementById('strip-primary-email').innerText = firstEmail;
+        document.getElementById('flow-primary-node').innerText = `Slot 1 (${firstEmail})`;
       } catch (err) {
-        console.error(err);
+        console.error('Status fetch error:', err);
+        document.getElementById('gateway-status-text').innerText = 'Sync Error';
       }
     }
 
-    // 2. Curated Models & Test Runner
-    const modelsList = [
-      { id: "gemini-3.8-flash-high", name: "Gemini 3.8 Flash (High)", tier: "Gemini Flash", tierClass: "tier-gemini" },
-      { id: "gemini-3.7-flash-high", name: "Gemini 3.7 Flash (High)", tier: "Gemini Flash", tierClass: "tier-gemini" },
-      { id: "gemini-3.7-flash-medium", name: "Gemini 3.7 Flash (Medium)", tier: "Gemini Flash", tierClass: "tier-gemini" },
-      { id: "gemini-3.6-flash-medium", name: "Gemini 3.6 Flash (Medium)", tier: "Gemini Flash", tierClass: "tier-gemini" },
-      { id: "gemini-3.1-pro-high", name: "Gemini 3.1 Pro (High)", tier: "Gemini Pro", tierClass: "tier-pro" },
-      { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", tier: "Claude", tierClass: "tier-claude" },
-      { id: "claude-opus-4-6-thinking", name: "Claude Opus 4.6 (Thinking)", tier: "Claude", tierClass: "tier-claude" },
-      { id: "gpt-oss-120b-medium", name: "GPT-OSS 120B (Medium)", tier: "GPT", tierClass: "tier-gpt" }
+    // 2. Curated Models & Live Ping Tests
+    const modelsCatalog = [
+      { id: "gemini-3.8-flash-high", name: "Gemini 3.8 Flash (High)", tier: "Gemini", tagClass: "provider-gemini", context: "1M tokens" },
+      { id: "gemini-3.7-flash-high", name: "Gemini 3.7 Flash (High)", tier: "Gemini", tagClass: "provider-gemini", context: "1M tokens" },
+      { id: "gemini-3.7-flash-medium", name: "Gemini 3.7 Flash (Medium)", tier: "Gemini", tagClass: "provider-gemini", context: "1M tokens" },
+      { id: "gemini-3.6-flash-medium", name: "Gemini 3.6 Flash (Medium)", tier: "Gemini", tagClass: "provider-gemini", context: "1M tokens" },
+      { id: "gemini-3.1-pro-high", name: "Gemini 3.1 Pro (High)", tier: "Pro", tagClass: "provider-pro", context: "2M tokens" },
+      { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", tier: "Claude", tagClass: "provider-claude", context: "200k tokens" },
+      { id: "claude-opus-4-6-thinking", name: "Claude Opus 4.6 (Thinking)", tier: "Claude", tagClass: "provider-claude", context: "200k tokens" },
+      { id: "gpt-oss-120b-medium", name: "GPT-OSS 120B (Medium)", tier: "GPT-OSS", tagClass: "provider-gpt", context: "128k tokens" }
     ];
 
-    function renderModelsTestList() {
-      const container = document.getElementById('models-test-list');
-      container.innerHTML = '';
+    function renderModelsTable() {
+      const tbody = document.getElementById('models-table-body');
+      tbody.innerHTML = '';
 
-      modelsList.forEach(m => {
-        const card = document.createElement('div');
-        card.className = 'model-test-card';
-        card.id = `model-card-${m.id}`;
+      modelsCatalog.forEach(m => {
+        const tr = document.createElement('tr');
+        tr.id = `row-${m.id}`;
 
-        card.innerHTML = `
-          <div class="model-info-col">
-            <span class="model-tier-badge ${m.tierClass}">${m.tier}</span>
-            <div>
-              <div class="model-name-text">${m.name}</div>
-              <div class="model-id-text">${m.id}</div>
-            </div>
-          </div>
-          <div class="model-status-col">
-            <span class="test-result-badge" id="status-${m.id}">Ready</span>
-            <button class="btn btn-test" id="btn-test-${m.id}" onclick="testSingleModel('${m.id}')">⚡ Test</button>
-          </div>
+        tr.innerHTML = `
+          <td>
+            <span class="provider-tag ${m.tagClass}">${m.tier}</span>
+          </td>
+          <td>
+            <span class="model-primary-name">${m.name}</span>
+          </td>
+          <td>
+            <span class="model-code-id" title="Click to copy identifier" onclick="copyText('${m.id}')" style="cursor: pointer;">
+              ${m.id}
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </span>
+          </td>
+          <td>
+            <span class="badge-status idle" id="badge-status-${m.id}">● Idle</span>
+          </td>
+          <td style="text-align: right;">
+            <button class="btn btn-ghost" id="btn-ping-${m.id}" onclick="testSingleModel('${m.id}')" style="padding: 0.25rem 0.65rem; font-size: 11.5px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Ping
+            </button>
+          </td>
         `;
-        container.appendChild(card);
+        tbody.appendChild(tr);
       });
     }
 
     async function testSingleModel(modelId) {
-      const badge = document.getElementById(`status-${modelId}`);
-      const btn = document.getElementById(`btn-test-${modelId}`);
+      const badge = document.getElementById(`badge-status-${modelId}`);
+      const btn = document.getElementById(`btn-ping-${modelId}`);
 
-      badge.className = 'test-result-badge testing';
-      badge.innerText = 'Testing...';
-      btn.disabled = true;
+      badge.className = 'badge-status testing';
+      badge.innerHTML = '● Testing...';
+      if (btn) btn.disabled = true;
 
-      const startTime = performance.now();
+      const t0 = performance.now();
       try {
         const res = await fetch('/v1/chat/completions', {
           method: 'POST',
@@ -1045,105 +1638,116 @@
           })
         });
 
-        const elapsed = Math.round(performance.now() - startTime);
+        const elapsed = Math.round(performance.now() - t0);
 
         if (res.ok) {
-          badge.className = 'test-result-badge ok';
-          badge.innerText = `✓ 200 OK (${elapsed}ms)`;
+          badge.className = 'badge-status ok';
+          badge.innerHTML = `● 200 OK (${elapsed}ms)`;
+          logDiagnostic(modelId, `200 OK (${elapsed}ms)`, true);
         } else {
-          badge.className = 'test-result-badge err';
-          badge.innerText = `✗ ${res.status} Error (${elapsed}ms)`;
+          badge.className = 'badge-status err';
+          badge.innerHTML = `● HTTP ${res.status} (${elapsed}ms)`;
+          logDiagnostic(modelId, `HTTP ${res.status} error (${elapsed}ms)`, false);
         }
       } catch (err) {
-        badge.className = 'test-result-badge err';
-        badge.innerText = '✗ Net Error';
+        badge.className = 'badge-status err';
+        badge.innerHTML = '● Net Fail';
+        logDiagnostic(modelId, 'Network transport error', false);
       } finally {
-        btn.disabled = false;
+        if (btn) btn.disabled = false;
       }
     }
 
     async function testAllModels() {
-      showToast('Testing all 8 models sequentially...');
-      for (const m of modelsList) {
+      const testAllBtn = document.getElementById('btn-test-all');
+      testAllBtn.disabled = true;
+      showToast('Executing sequential endpoint verification...');
+      document.getElementById('term-status-tag').innerText = 'Testing All...';
+
+      for (const m of modelsCatalog) {
         await testSingleModel(m.id);
       }
-      showToast('Model testing completed!');
+
+      document.getElementById('term-status-tag').innerText = 'Idle';
+      testAllBtn.disabled = false;
+      showToast('All endpoint health checks completed');
     }
 
-    // 3. Accounts Drag & Drop Priority
+    // 3. Account Pool & Priority Management
     async function loadAccounts() {
       try {
         const res = await fetch('/api/accounts');
         const data = await res.json();
-        const container = document.getElementById('accounts-container');
+        const container = document.getElementById('account-list-stack');
         container.innerHTML = '';
 
         if (!data.accounts || data.accounts.length === 0) {
-          container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.82rem;">No accounts in pool.</p>';
+          container.innerHTML = '<div style="color: var(--text-secondary); font-family: var(--font-mono); font-size: 12.5px; padding: 1.5rem;">No accounts loaded into pool.</div>';
           return;
         }
 
+        currentAccountsList = data.accounts;
+
         data.accounts.forEach((acc, idx) => {
           const item = document.createElement('div');
-          item.className = 'account-card';
+          item.className = 'account-row-item';
           item.draggable = true;
           item.dataset.email = acc.email;
 
-          const initial = (acc.email || 'G')[0].toUpperCase();
           const isPrimary = (idx === 0);
-          const pBadge = isPrimary 
-            ? `<span class="priority-badge primary">👑 Priority 1 (Used First)</span>` 
-            : `<span class="priority-badge fallback">⚡ Priority ${idx + 1} (Fallback)</span>`;
+          const badgeHtml = isPrimary
+            ? `<span class="account-slot-badge primary">SLOT 1 · PRIMARY ROUTE</span>`
+            : `<span class="account-slot-badge standby">SLOT ${idx + 1} · FAILOVER STANDBY</span>`;
 
           item.innerHTML = `
-            <div class="account-main-info">
-              <div class="drag-handle" title="Drag to reorder priority">⋮⋮</div>
-              <div class="avatar">${initial}</div>
-              <div class="account-text-wrap">
-                <div class="account-email-row">
-                  <span class="email-title">${acc.email}</span>
-                  ${pBadge}
+            <div class="account-left-info">
+              <div class="drag-grippy" title="Drag to reorder priority order">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="9" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="18" r="1"/></svg>
+              </div>
+              <div>
+                <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+                  <span class="account-email-label">${acc.email}</span>
+                  ${badgeHtml}
                 </div>
-                <div class="meta-subtitle">
-                  <span>${acc.projectId || 'aicode-consumers'}</span>
-                  <span>•</span>
-                  <span style="color: #34d399; font-weight: 600;">Active</span>
+                <div class="account-project-id" style="margin-top: 0.2rem;">
+                  Project: <span>${acc.projectId || 'aicode-consumers'}</span>
+                  <span style="margin: 0 0.35rem;">•</span>
+                  <span style="color: var(--success); font-weight: 500;">Ready</span>
                 </div>
               </div>
             </div>
-            <button class="btn btn-danger" onclick="removeAccount('${acc.email}')">Remove</button>
+            <div class="account-right-actions">
+              <button class="btn btn-danger-ghost" onclick="removeAccount('${acc.email}')">Remove</button>
+            </div>
           `;
           container.appendChild(item);
         });
 
         initDragAndDrop(container);
       } catch (err) {
-        console.error(err);
+        console.error('Failed to load accounts:', err);
       }
     }
 
     let draggedItem = null;
 
     function initDragAndDrop(container) {
-      const items = container.querySelectorAll('.account-card');
+      const items = container.querySelectorAll('.account-row-item');
 
       items.forEach(item => {
-        item.addEventListener('dragstart', (e) => {
+        item.addEventListener('dragstart', () => {
           draggedItem = item;
           setTimeout(() => item.classList.add('dragging'), 0);
-          e.dataTransfer.effectAllowed = 'move';
         });
 
         item.addEventListener('dragend', () => {
-          if (draggedItem) {
-            draggedItem.classList.remove('dragging');
-            draggedItem = null;
-          }
+          item.classList.remove('dragging');
+          draggedItem = null;
+          savePriorityOrder();
         });
 
         item.addEventListener('dragover', (e) => {
           e.preventDefault();
-          e.dataTransfer.dropEffect = 'move';
           const afterElement = getDragAfterElement(container, e.clientY);
           if (afterElement == null) {
             container.appendChild(draggedItem);
@@ -1151,17 +1755,11 @@
             container.insertBefore(draggedItem, afterElement);
           }
         });
-
-        item.addEventListener('drop', async (e) => {
-          e.preventDefault();
-          await saveNewOrder(container);
-        });
       });
     }
 
     function getDragAfterElement(container, y) {
-      const draggableElements = [...container.querySelectorAll('.account-card:not(.dragging)')];
-
+      const draggableElements = [...container.querySelectorAll('.account-row-item:not(.dragging)')];
       return draggableElements.reduce((closest, child) => {
         const box = child.getBoundingClientRect();
         const offset = y - box.top - box.height / 2;
@@ -1173,20 +1771,22 @@
       }, { offset: Number.NEGATIVE_INFINITY }).element;
     }
 
-    async function saveNewOrder(container) {
-      const reorderedItems = [...container.querySelectorAll('.account-card')];
-      const newEmailsOrder = reorderedItems.map(el => el.dataset.email);
+    async function savePriorityOrder() {
+      const container = document.getElementById('account-list-stack');
+      const reorderedItems = container.querySelectorAll('.account-row-item');
+      const newEmailsOrder = [];
 
       reorderedItems.forEach((el, idx) => {
+        newEmailsOrder.push(el.dataset.email);
         const isPrimary = (idx === 0);
-        const pBadge = el.querySelector('.priority-badge');
-        if (pBadge) {
+        const badge = el.querySelector('.account-slot-badge');
+        if (badge) {
           if (isPrimary) {
-            pBadge.className = 'priority-badge primary';
-            pBadge.innerHTML = '👑 Priority 1 (Used First)';
+            badge.className = 'account-slot-badge primary';
+            badge.innerHTML = 'SLOT 1 · PRIMARY ROUTE';
           } else {
-            pBadge.className = 'priority-badge fallback';
-            pBadge.innerHTML = `⚡ Priority ${idx + 1} (Fallback)`;
+            badge.className = 'account-slot-badge standby';
+            badge.innerHTML = `SLOT ${idx + 1} · FAILOVER STANDBY`;
           }
         }
       });
@@ -1198,32 +1798,34 @@
           body: JSON.stringify({ order: newEmailsOrder })
         });
         if (res.ok) {
-          showToast(`Priority updated! ${newEmailsOrder[0]} is Primary.`);
+          showToast(`Priority committed: ${newEmailsOrder[0]} is Primary`);
+          document.getElementById('strip-primary-email').innerText = newEmailsOrder[0];
+          document.getElementById('flow-primary-node').innerText = `Slot 1 (${newEmailsOrder[0]})`;
           switchQuotaAccount(newEmailsOrder[0]);
         }
       } catch (err) {
-        showToast('Failed to save priority order: ' + err.message);
+        showToast('Failed to save priority order');
       }
     }
 
     async function removeAccount(email) {
-      if (!confirm(`Remove ${email} from pool?`)) return;
+      if (!confirm(`Remove ${email} from the upstream pool?`)) return;
       try {
         await fetch('/api/accounts/remove', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email })
         });
-        showToast(`Account ${email} removed.`);
-        loadAccounts();
-        loadStatus();
+        showToast(`Account ${email} removed`);
+        await loadAccounts();
+        await loadStatus();
       } catch (err) {
-        showToast('Error removing: ' + err.message);
+        showToast('Error removing account');
       }
     }
 
-    async function addToken() {
-      const input = document.getElementById('token-input');
+    async function submitManualToken() {
+      const input = document.getElementById('manual-token-input');
       const token = input.value.trim();
       if (!token) return;
 
@@ -1235,19 +1837,24 @@
         });
         const data = await res.json();
         if (data.email) {
-          showToast(`Account ${data.email} added!`);
+          showToast(`Account ${data.email} successfully enrolled`);
           input.value = '';
-          loadAccounts();
-          loadStatus();
+          await loadAccounts();
+          await loadStatus();
+        } else {
+          showToast('Failed to enroll token');
         }
       } catch (err) {
-        showToast('Failed: ' + err.message);
+        showToast('Network error enrolling token');
       }
     }
 
-    // 4. Client Integration Snippets
-    const snippets = {
-      hermes: `# ~/.hermes/config.yaml
+    // 4. Client Integration Matrix
+    const codeSnippets = {
+      hermes: {
+        filename: '~/.hermes/config.yaml',
+        lang: 'YAML',
+        code: `# ~/.hermes/config.yaml
 model:
   provider: anti-api
   default: gemini-3.7-flash-high
@@ -1264,66 +1871,101 @@ providers:
       gemini-3.8-flash-high: {}
       gemini-3.7-flash-high: {}
       claude-sonnet-4-6: {}
-      gemini-3.1-pro-high: {}`,
+      gemini-3.1-pro-high: {}`
+      },
+      cursor: {
+        filename: 'Cursor / Windsurf Custom OpenAI Settings',
+        lang: 'JSON / Settings',
+        code: `// Configure in Cursor Settings > Models > OpenAI API
+{
+  "openai_base_url": "http://127.0.0.1:8964/v1",
+  "openai_api_key": "antiapi",
+  "models": [
+    "gemini-3.8-flash-high",
+    "gemini-3.7-flash-high",
+    "claude-sonnet-4-6",
+    "claude-opus-4-6-thinking",
+    "gemini-3.1-pro-high"
+  ]
+}`
+      },
+      python: {
+        filename: 'antiapi_client.py',
+        lang: 'Python',
+        code: `from openai import OpenAI
 
-      cursor: `// Cursor / Windsurf Custom OpenAI Settings
-openai_base_url: "http://127.0.0.1:8964/v1"
-openai_api_key: "antiapi"
-models:
-  - "gemini-3.8-flash-high"
-  - "gemini-3.7-flash-high"
-  - "claude-sonnet-4-6"
-  - "gemini-3.1-pro-high"`,
-
-      python: `from openai import OpenAI
-
+# Initialize standard OpenAI client pointing to AntiAPI Gateway
 client = OpenAI(
     base_url="http://127.0.0.1:8964/v1",
     api_key="antiapi"
 )
 
+# Stream completions from Claude, Gemini, or GPT models
 response = client.chat.completions.create(
     model="gemini-3.8-flash-high",
-    messages=[{"role": "user", "content": "Hello!"}],
+    messages=[{"role": "user", "content": "Explain raft consensus in 2 sentences."}],
     stream=True
 )
 
 for chunk in response:
-    print(chunk.choices[0].delta.content or "", end="", flush=True)
-print()`,
-
-      curl: `curl http://localhost:8964/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer antiapi" \
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="", flush=True)
+print()`
+      },
+      curl: {
+        filename: 'terminal.sh',
+        lang: 'Bash / cURL',
+        code: `curl http://127.0.0.1:8964/v1/chat/completions \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer antiapi" \\
   -d '{
     "model": "gemini-3.8-flash-high",
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "stream": true
+    "messages": [
+      {"role": "user", "content": "Hello from AntiAPI gateway"}
+    ],
+    "stream": false
   }'`
+      }
     };
 
-    let activeTab = 'hermes';
+    let activeSnippetKey = 'hermes';
 
-    function showSnippet(tab) {
-      activeTab = tab;
-      document.querySelectorAll('#integration-tabs .chip').forEach(el => {
-        el.classList.toggle('active', el.innerText.toLowerCase().includes(tab));
+    function activateSnippet(key, btn) {
+      activeSnippetKey = key;
+      document.querySelectorAll('.snippet-nav-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+
+      const data = codeSnippets[key];
+      if (data) {
+        document.getElementById('snippet-filename').innerText = data.filename;
+        document.getElementById('snippet-lang-tag').innerText = data.lang;
+        document.getElementById('active-snippet-text').innerText = data.code;
+      }
+    }
+
+    function copyCurrentSnippet() {
+      const data = codeSnippets[activeSnippetKey];
+      if (data) {
+        copyText(data.code);
+        showToast('Snippet copied to clipboard');
+      }
+    }
+
+    function copyText(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast(`Copied: ${text.slice(0, 24)}...`);
+      }).catch(() => {
+        showToast('Copied to clipboard');
       });
-      document.getElementById('snippet-display').innerText = snippets[tab] || '';
     }
 
-    function copySnippet() {
-      navigator.clipboard.writeText(snippets[activeTab] || '');
-      showToast('Config copied to clipboard!');
-    }
-
-    // Initialize
+    // Initialization
     window.addEventListener('DOMContentLoaded', () => {
-      renderModelsTestList();
+      renderModelsTable();
       loadStatus();
       loadAccounts();
-      showSnippet('hermes');
-      setInterval(loadStatus, 10000);
+      activateSnippet('hermes', document.querySelector('.snippet-nav-btn'));
+      setInterval(loadStatus, 8000);
     });
   </script>
 </body>

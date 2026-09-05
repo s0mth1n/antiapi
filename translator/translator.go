@@ -13,7 +13,7 @@ import (
 	"antiapi/models"
 )
 
-func getMaxTokensForModel(model string, requested *int) int {
+func maxTokensForModel(model string, requested *int) int {
 	maxLimit := 64000
 	if strings.Contains(model, "gpt") {
 		maxLimit = 16384
@@ -67,14 +67,22 @@ type ClaudeRequest struct {
 	System    any             `json:"system,omitempty"`
 	Stream    bool            `json:"stream"`
 	MaxTokens *int            `json:"max_tokens,omitempty"`
+	Tools     []any           `json:"tools,omitempty"`
 }
 
 // Upstream Google Cloud Code Structures
+type GoogleInlineData struct {
+	MimeType string `json:"mimeType"`
+	Data     string `json:"data"`
+}
+
 type GooglePart struct {
-	Text             string          `json:"text,omitempty"`
-	ThoughtSignature string          `json:"thoughtSignature,omitempty"`
-	FunctionCall     *GoogleFuncCall `json:"functionCall,omitempty"`
-	FunctionResponse *GoogleFuncResp `json:"functionResponse,omitempty"`
+	Text             string            `json:"text,omitempty"`
+	Thought          bool              `json:"thought,omitempty"`
+	ThoughtSignature string            `json:"thoughtSignature,omitempty"`
+	InlineData       *GoogleInlineData `json:"inlineData,omitempty"`
+	FunctionCall     *GoogleFuncCall   `json:"functionCall,omitempty"`
+	FunctionResponse *GoogleFuncResp   `json:"functionResponse,omitempty"`
 }
 
 type GoogleFuncCall struct {
@@ -155,7 +163,7 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 		Project: project,
 	}
 
-	maxTokens := getMaxTokensForModel(resolvedModel, req.MaxTokens)
+	maxTokens := maxTokensForModel(resolvedModel, req.MaxTokens)
 	gReq.Request.GenerationConfig = map[string]any{
 		"maxOutputTokens": maxTokens,
 	}
@@ -218,10 +226,8 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 	var systemParts []GooglePart
 
 	for _, msg := range req.Messages {
-		text := extractText(msg.Content)
-
 		if msg.Role == "system" {
-			systemParts = append(systemParts, GooglePart{Text: text})
+			systemParts = append(systemParts, GooglePart{Text: extractText(msg.Content)})
 			continue
 		}
 
@@ -230,9 +236,9 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 			role = "model"
 		}
 
-		parts := []GooglePart{}
-		if text != "" {
-			parts = append(parts, GooglePart{Text: text})
+		var parts []GooglePart
+		if msg.Role != "tool" {
+			parts = append(parts, extractOpenAIParts(msg.Content)...)
 		}
 
 		// Handle tool calls from assistant
@@ -311,10 +317,11 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 				}
 			}
 
+			rawContent := extractText(msg.Content)
 			if thoughtSig != "" {
 				var respMap map[string]any
-				if err := json.Unmarshal([]byte(text), &respMap); err != nil {
-					respMap = map[string]any{"result": text}
+				if err := json.Unmarshal([]byte(rawContent), &respMap); err != nil {
+					respMap = map[string]any{"result": rawContent}
 				}
 				parts = append(parts, GooglePart{
 					FunctionResponse: &GoogleFuncResp{
@@ -326,16 +333,22 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 			} else {
 				// Text representation fallback
 				parts = append(parts, GooglePart{
-					Text: fmt.Sprintf("[Tool `%s` returned]:\n%s", funcName, text),
+					Text: fmt.Sprintf("[Tool `%s` returned]:\n%s", funcName, rawContent),
 				})
 			}
 		}
 
+		// Turn merging: if consecutive messages have the same role (e.g. multiple tool responses),
+		// merge parts into the last turn to enforce strict user/model alternation required by Google Cloud Code PA.
 		if len(parts) > 0 {
-			contents = append(contents, GoogleContent{
-				Role:  role,
-				Parts: parts,
-			})
+			if len(contents) > 0 && contents[len(contents)-1].Role == role {
+				contents[len(contents)-1].Parts = append(contents[len(contents)-1].Parts, parts...)
+			} else {
+				contents = append(contents, GoogleContent{
+					Role:  role,
+					Parts: parts,
+				})
+			}
 		}
 	}
 
@@ -343,6 +356,14 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 		gReq.Request.SystemInstruction = &struct {
 			Parts []GooglePart `json:"parts"`
 		}{Parts: systemParts}
+	}
+
+	// Ensure the first content turn is user role
+	if len(contents) > 0 && contents[0].Role == "model" {
+		contents = append([]GoogleContent{{
+			Role:  "user",
+			Parts: []GooglePart{{Text: "Hello"}},
+		}}, contents...)
 	}
 
 	// If contents is empty, add a placeholder
@@ -367,9 +388,37 @@ func ConvertClaudeToGoogle(req *ClaudeRequest) (*GoogleRequest, string) {
 		Project: project,
 	}
 
-	maxTokens := getMaxTokensForModel(resolvedModel, req.MaxTokens)
+	maxTokens := maxTokensForModel(resolvedModel, req.MaxTokens)
 	gReq.Request.GenerationConfig = map[string]any{
 		"maxOutputTokens": maxTokens,
+	}
+
+	// Handle Anthropic Tools declaration
+	if len(req.Tools) > 0 {
+		var funcDecls []map[string]any
+		for _, t := range req.Tools {
+			if tm, ok := t.(map[string]any); ok {
+				name, _ := tm["name"].(string)
+				desc, _ := tm["description"].(string)
+				decl := map[string]any{
+					"name":        name,
+					"description": desc,
+				}
+				if schema, hasSchema := tm["input_schema"]; hasSchema {
+					decl["parameters"] = schema
+				} else if params, hasParams := tm["parameters"]; hasParams {
+					decl["parameters"] = params
+				}
+				funcDecls = append(funcDecls, decl)
+			}
+		}
+		if len(funcDecls) > 0 {
+			gReq.Request.Tools = []any{
+				map[string]any{
+					"functionDeclarations": funcDecls,
+				},
+			}
+		}
 	}
 
 	if req.System != nil {
@@ -383,19 +432,48 @@ func ConvertClaudeToGoogle(req *ClaudeRequest) (*GoogleRequest, string) {
 		}
 	}
 
+	// Pre-scan Claude tool_use calls to populate thought signatures
+	callIDToThought := make(map[string]string)
+	for _, msg := range req.Messages {
+		if arr, ok := msg.Content.([]any); ok {
+			for _, item := range arr {
+				if m, ok := item.(map[string]any); ok {
+					if t, _ := m["type"].(string); t == "tool_use" {
+						if id, _ := m["id"].(string); id != "" {
+							if cached, ok := GetToolCall(id); ok && cached.ThoughtSignature != "" {
+								callIDToThought[id] = cached.ThoughtSignature
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	var contents []GoogleContent
 	for _, msg := range req.Messages {
 		role := "user"
 		if msg.Role == "assistant" {
 			role = "model"
 		}
-		text := extractText(msg.Content)
-		if text != "" {
-			contents = append(contents, GoogleContent{
-				Role:  role,
-				Parts: []GooglePart{{Text: text}},
-			})
+		parts := extractClaudeParts(msg.Content, callIDToThought)
+		if len(parts) > 0 {
+			if len(contents) > 0 && contents[len(contents)-1].Role == role {
+				contents[len(contents)-1].Parts = append(contents[len(contents)-1].Parts, parts...)
+			} else {
+				contents = append(contents, GoogleContent{
+					Role:  role,
+					Parts: parts,
+				})
+			}
 		}
+	}
+
+	if len(contents) > 0 && contents[0].Role == "model" {
+		contents = append([]GoogleContent{{
+			Role:  "user",
+			Parts: []GooglePart{{Text: "Hello"}},
+		}}, contents...)
 	}
 
 	if len(contents) == 0 {
@@ -407,6 +485,176 @@ func ConvertClaudeToGoogle(req *ClaudeRequest) (*GoogleRequest, string) {
 
 	gReq.Request.Contents = contents
 	return gReq, resolvedModel
+}
+
+func parseDataURL(url string) GooglePart {
+	parts := strings.SplitN(url, ";base64,", 2)
+	if len(parts) != 2 {
+		return GooglePart{Text: "[Image URL: " + url + "]"}
+	}
+	mime := strings.TrimPrefix(parts[0], "data:")
+	if mime == "" {
+		mime = "image/jpeg"
+	}
+	return GooglePart{
+		InlineData: &GoogleInlineData{
+			MimeType: mime,
+			Data:     parts[1],
+		},
+	}
+}
+
+func extractOpenAIParts(content any) []GooglePart {
+	if content == nil {
+		return nil
+	}
+	if s, ok := content.(string); ok {
+		if s != "" {
+			return []GooglePart{{Text: s}}
+		}
+		return nil
+	}
+	if arr, ok := content.([]any); ok {
+		var parts []GooglePart
+		for _, item := range arr {
+			if s, ok := item.(string); ok && s != "" {
+				parts = append(parts, GooglePart{Text: s})
+			} else if m, ok := item.(map[string]any); ok {
+				t, _ := m["type"].(string)
+				switch t {
+				case "text":
+					if textStr, ok := m["text"].(string); ok && textStr != "" {
+						parts = append(parts, GooglePart{Text: textStr})
+					}
+				case "image_url":
+					if imgObj, ok := m["image_url"].(map[string]any); ok {
+						if urlStr, ok := imgObj["url"].(string); ok {
+							if strings.HasPrefix(urlStr, "data:") {
+								parts = append(parts, parseDataURL(urlStr))
+							} else {
+								parts = append(parts, GooglePart{Text: "[Image URL: " + urlStr + "]"})
+							}
+						}
+					}
+				}
+			}
+		}
+		return parts
+	}
+	s := fmt.Sprintf("%v", content)
+	if s != "" {
+		return []GooglePart{{Text: s}}
+	}
+	return nil
+}
+
+func extractClaudeParts(content any, callIDToThought map[string]string) []GooglePart {
+	if content == nil {
+		return nil
+	}
+	if s, ok := content.(string); ok {
+		if s != "" {
+			return []GooglePart{{Text: s}}
+		}
+		return nil
+	}
+	if arr, ok := content.([]any); ok {
+		var parts []GooglePart
+		for _, item := range arr {
+			if s, ok := item.(string); ok && s != "" {
+				parts = append(parts, GooglePart{Text: s})
+			} else if m, ok := item.(map[string]any); ok {
+				t, _ := m["type"].(string)
+				switch t {
+				case "text":
+					if textStr, ok := m["text"].(string); ok && textStr != "" {
+						parts = append(parts, GooglePart{Text: textStr})
+					}
+				case "image":
+					if src, ok := m["source"].(map[string]any); ok {
+						srcType, _ := src["type"].(string)
+						if srcType == "base64" {
+							mediaType, _ := src["media_type"].(string)
+							data, _ := src["data"].(string)
+							if mediaType == "" {
+								mediaType = "image/jpeg"
+							}
+							parts = append(parts, GooglePart{
+								InlineData: &GoogleInlineData{
+									MimeType: mediaType,
+									Data:     data,
+								},
+							})
+						}
+					}
+				case "tool_use":
+					id, _ := m["id"].(string)
+					name, _ := m["name"].(string)
+					inputObj, _ := m["input"].(map[string]any)
+					if inputObj == nil {
+						inputObj = make(map[string]any)
+					}
+					argsBytes, _ := json.Marshal(inputObj)
+					thoughtSig := callIDToThought[id]
+					if thoughtSig == "" {
+						if cached, ok := GetToolCall(id); ok {
+							thoughtSig = cached.ThoughtSignature
+						}
+					}
+					RecordToolCall(id, name, string(argsBytes), thoughtSig)
+					if thoughtSig != "" {
+						parts = append(parts, GooglePart{
+							ThoughtSignature: thoughtSig,
+							FunctionCall: &GoogleFuncCall{
+								Name: name,
+								Args: inputObj,
+								ID:   id,
+							},
+						})
+					} else {
+						parts = append(parts, GooglePart{
+							Text: fmt.Sprintf("[Assistant called tool `%s` with arguments: %s]", name, string(argsBytes)),
+						})
+					}
+				case "tool_result":
+					toolUseID, _ := m["tool_use_id"].(string)
+					resultContent := extractText(m["content"])
+					name := ""
+					thoughtSig := ""
+					if cached, ok := GetToolCall(toolUseID); ok {
+						name = cached.Name
+						thoughtSig = cached.ThoughtSignature
+					}
+					if name == "" {
+						name = "tool_result"
+					}
+					if thoughtSig != "" {
+						var respMap map[string]any
+						if err := json.Unmarshal([]byte(resultContent), &respMap); err != nil {
+							respMap = map[string]any{"result": resultContent}
+						}
+						parts = append(parts, GooglePart{
+							FunctionResponse: &GoogleFuncResp{
+								Name:     name,
+								Response: respMap,
+								ID:       toolUseID,
+							},
+						})
+					} else {
+						parts = append(parts, GooglePart{
+							Text: fmt.Sprintf("[Tool `%s` returned]:\n%s", name, resultContent),
+						})
+					}
+				}
+			}
+		}
+		return parts
+	}
+	s := fmt.Sprintf("%v", content)
+	if s != "" {
+		return []GooglePart{{Text: s}}
+	}
+	return nil
 }
 
 func extractText(content any) string {
@@ -431,10 +679,12 @@ func extractText(content any) string {
 }
 
 type ParsedChunk struct {
-	Text         string
-	Thought      string
-	FinishReason string
-	ToolCalls    []OpenAIToolCall
+	Text             string
+	ReasoningText    string
+	Thought          string
+	ThoughtSignature string
+	FinishReason     string
+	ToolCalls        []OpenAIToolCall
 }
 
 // ParseGoogleSSEChunk extracts text, thought, finish reason, and function calls
@@ -461,11 +711,19 @@ func ParseGoogleSSEChunk(raw []byte) (ParsedChunk, error) {
 		res.FinishReason = cand.FinishReason
 
 		var textBuilder strings.Builder
+		var reasoningBuilder strings.Builder
 		for _, part := range cand.Content.Parts {
-			if part.Text != "" {
-				textBuilder.WriteString(part.Text)
+			if part.Thought {
+				if part.Text != "" {
+					reasoningBuilder.WriteString(part.Text)
+				}
+			} else {
+				if part.Text != "" {
+					textBuilder.WriteString(part.Text)
+				}
 			}
 			if part.ThoughtSignature != "" {
+				res.ThoughtSignature = part.ThoughtSignature
 				res.Thought = part.ThoughtSignature
 			}
 			if part.FunctionCall != nil {
@@ -486,13 +744,14 @@ func ParseGoogleSSEChunk(raw []byte) (ParsedChunk, error) {
 			}
 		}
 		res.Text = textBuilder.String()
+		res.ReasoningText = reasoningBuilder.String()
 	}
 
 	return res, nil
 }
 
 // FormatOpenAIChunk formats an incremental delta for OpenAI streaming client
-func FormatOpenAIChunk(id, model, text, finishReason string, toolCalls []OpenAIToolCall) string {
+func FormatOpenAIChunk(id, model, text, reasoningText, finishReason string, toolCalls []OpenAIToolCall) string {
 	type Choice struct {
 		Index        int            `json:"index"`
 		Delta        map[string]any `json:"delta"`
@@ -509,6 +768,9 @@ func FormatOpenAIChunk(id, model, text, finishReason string, toolCalls []OpenAIT
 	delta := make(map[string]any)
 	if text != "" {
 		delta["content"] = text
+	}
+	if reasoningText != "" {
+		delta["reasoning_content"] = reasoningText
 	}
 	if len(toolCalls) > 0 {
 		type TCDelta struct {
@@ -568,11 +830,12 @@ func FormatOpenAIChunk(id, model, text, finishReason string, toolCalls []OpenAIT
 }
 
 // FormatOpenAINonStream formats full response for non-streaming clients
-func FormatOpenAINonStream(id, model, content string, toolCalls []OpenAIToolCall) []byte {
+func FormatOpenAINonStream(id, model, content, reasoningContent string, toolCalls []OpenAIToolCall) []byte {
 	type Message struct {
-		Role      string           `json:"role"`
-		Content   *string          `json:"content"`
-		ToolCalls []OpenAIToolCall `json:"tool_calls,omitempty"`
+		Role             string           `json:"role"`
+		Content          *string          `json:"content"`
+		ReasoningContent *string          `json:"reasoning_content,omitempty"`
+		ToolCalls        []OpenAIToolCall `json:"tool_calls,omitempty"`
 	}
 	type Choice struct {
 		Index        int     `json:"index"`
@@ -592,6 +855,11 @@ func FormatOpenAINonStream(id, model, content string, toolCalls []OpenAIToolCall
 		contentPtr = &content
 	}
 
+	var rcPtr *string
+	if reasoningContent != "" {
+		rcPtr = &reasoningContent
+	}
+
 	finishReason := "stop"
 	if len(toolCalls) > 0 {
 		finishReason = "tool_calls"
@@ -606,9 +874,10 @@ func FormatOpenAINonStream(id, model, content string, toolCalls []OpenAIToolCall
 			{
 				Index: 0,
 				Message: Message{
-					Role:      "assistant",
-					Content:   contentPtr,
-					ToolCalls: toolCalls,
+					Role:             "assistant",
+					Content:          contentPtr,
+					ReasoningContent: rcPtr,
+					ToolCalls:        toolCalls,
 				},
 				FinishReason: finishReason,
 			},
@@ -620,27 +889,52 @@ func FormatOpenAINonStream(id, model, content string, toolCalls []OpenAIToolCall
 }
 
 // FormatClaudeNonStream formats response for Anthropic clients
-func FormatClaudeNonStream(id, model, content string) []byte {
-	type ContentBlock struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
+func FormatClaudeNonStream(id, model, content string, toolCalls []OpenAIToolCall) []byte {
+	type ClaudeContentBlock struct {
+		Type  string         `json:"type"`
+		Text  string         `json:"text,omitempty"`
+		ID    string         `json:"id,omitempty"`
+		Name  string         `json:"name,omitempty"`
+		Input map[string]any `json:"input,omitempty"`
 	}
 	type Response struct {
-		ID         string         `json:"id"`
-		Type       string         `json:"type"`
-		Role       string         `json:"role"`
-		Content    []ContentBlock `json:"content"`
-		Model      string         `json:"model"`
-		StopReason string         `json:"stop_reason"`
+		ID         string               `json:"id"`
+		Type       string               `json:"type"`
+		Role       string               `json:"role"`
+		Content    []ClaudeContentBlock `json:"content"`
+		Model      string               `json:"model"`
+		StopReason string               `json:"stop_reason"`
+	}
+
+	var blocks []ClaudeContentBlock
+	if content != "" {
+		blocks = append(blocks, ClaudeContentBlock{Type: "text", Text: content})
+	}
+	for _, tc := range toolCalls {
+		var inputMap map[string]any
+		if err := json.Unmarshal([]byte(tc.Function.Arguments), &inputMap); err != nil {
+			inputMap = make(map[string]any)
+		}
+		blocks = append(blocks, ClaudeContentBlock{
+			Type:  "tool_use",
+			ID:    tc.ID,
+			Name:  tc.Function.Name,
+			Input: inputMap,
+		})
+	}
+
+	stopReason := "end_turn"
+	if len(toolCalls) > 0 {
+		stopReason = "tool_use"
 	}
 
 	res := Response{
 		ID:         id,
 		Type:       "message",
 		Role:       "assistant",
-		Content:    []ContentBlock{{Type: "text", Text: content}},
+		Content:    blocks,
 		Model:      model,
-		StopReason: "end_turn",
+		StopReason: stopReason,
 	}
 
 	bytes, _ := json.Marshal(res)
