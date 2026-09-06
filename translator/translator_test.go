@@ -266,3 +266,147 @@ func TestFormatClaudeNonStreamToolCalls(t *testing.T) {
 		t.Errorf("expected block name 'execute_query', got '%v'", block["name"])
 	}
 }
+
+func TestPackUnpackThoughtSignature(t *testing.T) {
+	callID := "call_abc123"
+	sig := "fake-cryptographic-hmac-signature"
+
+	packed := PackCallID(callID, sig)
+	if !strings.HasPrefix(packed, callID+"_ts_") {
+		t.Fatalf("expected packed ID to start with %s_ts_, got %s", callID, packed)
+	}
+
+	unpackedID, unpackedSig := UnpackCallID(packed)
+	if unpackedID != callID {
+		t.Errorf("expected unpacked ID %s, got %s", callID, unpackedID)
+	}
+	if unpackedSig != sig {
+		t.Errorf("expected unpacked sig %s, got %s", sig, unpackedSig)
+	}
+
+	// Call ID containing _ts_ in prefix preserves baseID and unpacked sig correctly
+	customID := "call_ts_custom_tool"
+	packedCustom := PackCallID(customID, sig)
+	unpackedCustomID, unpackedCustomSig := UnpackCallID(packedCustom)
+	if unpackedCustomID != customID {
+		t.Errorf("expected unpacked custom ID %s, got %s", customID, unpackedCustomID)
+	}
+	if unpackedCustomSig != sig {
+		t.Errorf("expected unpacked custom sig %s, got %s", sig, unpackedCustomSig)
+	}
+
+	// Non-packed callID passes through cleanly
+	plainID, plainSig := UnpackCallID("call_plain_456")
+	if plainID != "call_plain_456" {
+		t.Errorf("expected call_plain_456, got %s", plainID)
+	}
+	if plainSig != "" {
+		t.Errorf("expected empty sig, got %s", plainSig)
+	}
+
+	// Invalid hex suffix or odd-length hex does not corrupt ID
+	for _, raw := range []string{"call_ts_invalid", "call_ts_123", "call_ts_"} {
+		id, s := UnpackCallID(raw)
+		if id != raw || s != "" {
+			t.Errorf("expected %s to pass through unchanged with empty sig, got id=%s, sig=%s", raw, id, s)
+		}
+	}
+}
+
+func TestClaudeStatelessToolNameRecovery(t *testing.T) {
+	// Simulate stateless client request with packed ID where toolCallMemory has not seen the ID
+	sig := "stateless-thought-token"
+	rawID := "call_calc_987"
+	packedID := PackCallID(rawID, sig)
+
+	req := &ClaudeRequest{
+		Model: "claude-3-5-sonnet",
+		Messages: []ClaudeMessage{
+			{Role: "user", Content: "Calculate 21 * 2"},
+			{
+				Role: "assistant",
+				Content: []any{
+					map[string]any{
+						"type":  "tool_use",
+						"id":    packedID,
+						"name":  "calculator",
+						"input": map[string]any{"expression": "21 * 2"},
+					},
+				},
+			},
+			{
+				Role: "user",
+				Content: []any{
+					map[string]any{
+						"type":        "tool_result",
+						"tool_use_id": packedID,
+						"content":     "42",
+					},
+				},
+			},
+		},
+	}
+
+	gReq, _ := ConvertClaudeToGoogle(req)
+	contents := gReq.Request.Contents
+
+	if len(contents) != 3 {
+		t.Fatalf("expected 3 turns, got %d", len(contents))
+	}
+
+	// Model turn: must contain FunctionCall with name "calculator" and unpacked ID "call_calc_987"
+	modelTurn := contents[1]
+	if modelTurn.Role != "model" || len(modelTurn.Parts) == 0 {
+		t.Fatalf("invalid model turn: %+v", modelTurn)
+	}
+	fc := modelTurn.Parts[0].FunctionCall
+	if fc == nil {
+		t.Fatal("expected functionCall part in model turn")
+	}
+	if fc.Name != "calculator" || fc.ID != rawID {
+		t.Errorf("expected FunctionCall name=calculator, ID=%s, got name=%s, ID=%s", rawID, fc.Name, fc.ID)
+	}
+	if modelTurn.Parts[0].ThoughtSignature != sig {
+		t.Errorf("expected ThoughtSignature=%s, got %s", sig, modelTurn.Parts[0].ThoughtSignature)
+	}
+
+	// User turn: must contain FunctionResponse matching name "calculator" (NOT "tool_result") and ID "call_calc_987"
+	userTurn := contents[2]
+	if userTurn.Role != "user" || len(userTurn.Parts) == 0 {
+		t.Fatalf("invalid user turn: %+v", userTurn)
+	}
+	fr := userTurn.Parts[0].FunctionResponse
+	if fr == nil {
+		t.Fatal("expected functionResponse part in user turn")
+	}
+	if fr.Name != "calculator" {
+		t.Errorf("expected FunctionResponse Name='calculator', got '%s'", fr.Name)
+	}
+	if fr.ID != rawID {
+		t.Errorf("expected FunctionResponse ID='%s', got '%s'", rawID, fr.ID)
+	}
+}
+
+func TestCleanAndSanitizeContents(t *testing.T) {
+	raw := []GoogleContent{
+		{Role: "model", Parts: []GooglePart{{Text: "leading model"}}},
+		{Role: "user", Parts: []GooglePart{{Text: "turn 1"}}},
+		{Role: "user", Parts: []GooglePart{{Text: "turn 1 continuation"}}},
+		{Role: "model", Parts: []GooglePart{{Text: "response 1"}}},
+		{Role: "model", Parts: []GooglePart{{Text: "response 1 extra"}}},
+	}
+
+	cleaned := CleanAndSanitizeContents(raw)
+
+	// Cleaned must start with user
+	if len(cleaned) == 0 || cleaned[0].Role != "user" {
+		t.Fatalf("expected first turn to be user, got %v", cleaned)
+	}
+
+	// Roles must strictly alternate
+	for i := 1; i < len(cleaned); i++ {
+		if cleaned[i].Role == cleaned[i-1].Role {
+			t.Errorf("consecutive identical roles at turn %d: %s", i, cleaned[i].Role)
+		}
+	}
+}

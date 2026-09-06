@@ -51,6 +51,7 @@ type OpenAIChatRequest struct {
 	Messages    []OpenAIMessage `json:"messages"`
 	Stream      bool            `json:"stream"`
 	Temperature *float64        `json:"temperature,omitempty"`
+	TopP        *float64        `json:"top_p,omitempty"`
 	MaxTokens   *int            `json:"max_tokens,omitempty"`
 	Tools       []any           `json:"tools,omitempty"`
 }
@@ -62,12 +63,14 @@ type ClaudeMessage struct {
 }
 
 type ClaudeRequest struct {
-	Model     string          `json:"model"`
-	Messages  []ClaudeMessage `json:"messages"`
-	System    any             `json:"system,omitempty"`
-	Stream    bool            `json:"stream"`
-	MaxTokens *int            `json:"max_tokens,omitempty"`
-	Tools     []any           `json:"tools,omitempty"`
+	Model       string          `json:"model"`
+	Messages    []ClaudeMessage `json:"messages"`
+	System      any             `json:"system,omitempty"`
+	Stream      bool            `json:"stream"`
+	Temperature *float64        `json:"temperature,omitempty"`
+	TopP        *float64        `json:"top_p,omitempty"`
+	MaxTokens   *int            `json:"max_tokens,omitempty"`
+	Tools       []any           `json:"tools,omitempty"`
 }
 
 // Upstream Google Cloud Code Structures
@@ -133,9 +136,35 @@ var (
 	toolCallMemory = make(map[string]ToolCallInfo)
 )
 
+// PackCallID encodes thoughtSignature into the callID if present so stateless clients preserve it across restarts.
+func PackCallID(callID, thoughtSig string) string {
+	if thoughtSig == "" {
+		return callID
+	}
+	encodedSig := hex.EncodeToString([]byte(thoughtSig))
+	return callID + "_ts_" + encodedSig
+}
+
+// UnpackCallID extracts the callID and any packed thoughtSignature.
+func UnpackCallID(rawID string) (string, string) {
+	if idx := strings.LastIndex(rawID, "_ts_"); idx != -1 {
+		baseID := rawID[:idx]
+		sigHex := rawID[idx+4:]
+		if sigBytes, err := hex.DecodeString(sigHex); err == nil && len(sigBytes) > 0 {
+			return baseID, string(sigBytes)
+		}
+		return rawID, ""
+	}
+	return rawID, ""
+}
+
 func RecordToolCall(id, name, args, thoughtSig string) {
 	if id == "" {
 		return
+	}
+	baseID, unpackedSig := UnpackCallID(id)
+	if thoughtSig == "" && unpackedSig != "" {
+		thoughtSig = unpackedSig
 	}
 	toolCallMu.Lock()
 	defer toolCallMu.Unlock()
@@ -144,12 +173,29 @@ func RecordToolCall(id, name, args, thoughtSig string) {
 		Args:             args,
 		ThoughtSignature: thoughtSig,
 	}
+	if baseID != id {
+		toolCallMemory[baseID] = ToolCallInfo{
+			Name:             name,
+			Args:             args,
+			ThoughtSignature: thoughtSig,
+		}
+	}
 }
 
 func GetToolCall(id string) (ToolCallInfo, bool) {
+	baseID, unpackedSig := UnpackCallID(id)
 	toolCallMu.RLock()
 	defer toolCallMu.RUnlock()
 	info, ok := toolCallMemory[id]
+	if !ok && baseID != id {
+		info, ok = toolCallMemory[baseID]
+	}
+	if ok && info.ThoughtSignature == "" && unpackedSig != "" {
+		info.ThoughtSignature = unpackedSig
+	}
+	if !ok && unpackedSig != "" {
+		return ToolCallInfo{ThoughtSignature: unpackedSig}, true
+	}
 	return info, ok
 }
 
@@ -169,6 +215,9 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 	}
 	if req.Temperature != nil {
 		gReq.Request.GenerationConfig["temperature"] = *req.Temperature
+	}
+	if req.TopP != nil {
+		gReq.Request.GenerationConfig["topP"] = *req.TopP
 	}
 
 	// 1. Process Tools declaration
@@ -243,9 +292,13 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 
 		// Handle tool calls from assistant
 		for _, tc := range msg.ToolCalls {
+			baseID, unpackedSig := UnpackCallID(tc.ID)
 			funcName := tc.Function.Name
 			if funcName == "" {
 				funcName = callIDToName[tc.ID]
+			}
+			if funcName == "" && baseID != tc.ID {
+				funcName = callIDToName[baseID]
 			}
 			if funcName == "" {
 				funcName = "action_tool"
@@ -257,14 +310,25 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 				args = make(map[string]any)
 			}
 
-			callID := tc.ID
+			callID := baseID
 			if callID == "" {
 				callID = GenerateID("call")
 			}
 
-			thoughtSig := callIDToThought[callID]
+			thoughtSig := callIDToThought[tc.ID]
+			if thoughtSig == "" && baseID != tc.ID {
+				thoughtSig = callIDToThought[baseID]
+			}
+			if thoughtSig == "" && unpackedSig != "" {
+				thoughtSig = unpackedSig
+			}
 			if thoughtSig == "" {
-				if cached, ok := GetToolCall(callID); ok {
+				if cached, ok := GetToolCall(tc.ID); ok {
+					thoughtSig = cached.ThoughtSignature
+				}
+			}
+			if thoughtSig == "" && baseID != tc.ID {
+				if cached, ok := GetToolCall(baseID); ok {
 					thoughtSig = cached.ThoughtSignature
 				}
 			}
@@ -292,12 +356,21 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 
 		// Handle tool response from user/tool
 		if msg.Role == "tool" {
+			baseID, unpackedSig := UnpackCallID(msg.ToolCallID)
 			funcName := msg.Name
 			if funcName == "" {
 				funcName = callIDToName[msg.ToolCallID]
 			}
+			if funcName == "" && baseID != msg.ToolCallID {
+				funcName = callIDToName[baseID]
+			}
 			if funcName == "" {
 				if cached, ok := GetToolCall(msg.ToolCallID); ok {
+					funcName = cached.Name
+				}
+			}
+			if funcName == "" && baseID != msg.ToolCallID {
+				if cached, ok := GetToolCall(baseID); ok {
 					funcName = cached.Name
 				}
 			}
@@ -305,14 +378,25 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 				funcName = "tool_result"
 			}
 
-			callID := msg.ToolCallID
+			callID := baseID
 			if callID == "" {
 				callID = GenerateID("call")
 			}
 
-			thoughtSig := callIDToThought[callID]
+			thoughtSig := callIDToThought[msg.ToolCallID]
+			if thoughtSig == "" && baseID != msg.ToolCallID {
+				thoughtSig = callIDToThought[baseID]
+			}
+			if thoughtSig == "" && unpackedSig != "" {
+				thoughtSig = unpackedSig
+			}
 			if thoughtSig == "" {
-				if cached, ok := GetToolCall(callID); ok {
+				if cached, ok := GetToolCall(msg.ToolCallID); ok {
+					thoughtSig = cached.ThoughtSignature
+				}
+			}
+			if thoughtSig == "" && baseID != msg.ToolCallID {
+				if cached, ok := GetToolCall(baseID); ok {
 					thoughtSig = cached.ThoughtSignature
 				}
 			}
@@ -358,24 +442,54 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 		}{Parts: systemParts}
 	}
 
-	// Ensure the first content turn is user role
-	if len(contents) > 0 && contents[0].Role == "model" {
-		contents = append([]GoogleContent{{
-			Role:  "user",
-			Parts: []GooglePart{{Text: "Hello"}},
-		}}, contents...)
-	}
-
-	// If contents is empty, add a placeholder
-	if len(contents) == 0 {
-		contents = append(contents, GoogleContent{
-			Role:  "user",
-			Parts: []GooglePart{{Text: "Hello"}},
-		})
-	}
-
-	gReq.Request.Contents = contents
+	// Ensure contents alternation and user-first turn
+	gReq.Request.Contents = CleanAndSanitizeContents(contents)
 	return gReq, resolvedModel
+}
+
+// CleanAndSanitizeContents guarantees strict user/model alternation,
+// ensures contents starts with user role, and collapses consecutive same-role turns into unified parts.
+func CleanAndSanitizeContents(contents []GoogleContent) []GoogleContent {
+	if len(contents) == 0 {
+		return []GoogleContent{
+			{
+				Role:  "user",
+				Parts: []GooglePart{{Text: "Hello"}},
+			},
+		}
+	}
+
+	var sanitized []GoogleContent
+	for _, c := range contents {
+		if len(c.Parts) == 0 {
+			continue
+		}
+		if len(sanitized) > 0 && sanitized[len(sanitized)-1].Role == c.Role {
+			sanitized[len(sanitized)-1].Parts = append(sanitized[len(sanitized)-1].Parts, c.Parts...)
+		} else {
+			sanitized = append(sanitized, c)
+		}
+	}
+
+	if len(sanitized) == 0 {
+		return []GoogleContent{
+			{
+				Role:  "user",
+				Parts: []GooglePart{{Text: "Hello"}},
+			},
+		}
+	}
+
+	if sanitized[0].Role == "model" {
+		sanitized = append([]GoogleContent{
+			{
+				Role:  "user",
+				Parts: []GooglePart{{Text: "Hello"}},
+			},
+		}, sanitized...)
+	}
+
+	return sanitized
 }
 
 // ConvertClaudeToGoogle converts Anthropic request to Google internal payload
@@ -391,6 +505,12 @@ func ConvertClaudeToGoogle(req *ClaudeRequest) (*GoogleRequest, string) {
 	maxTokens := maxTokensForModel(resolvedModel, req.MaxTokens)
 	gReq.Request.GenerationConfig = map[string]any{
 		"maxOutputTokens": maxTokens,
+	}
+	if req.Temperature != nil {
+		gReq.Request.GenerationConfig["temperature"] = *req.Temperature
+	}
+	if req.TopP != nil {
+		gReq.Request.GenerationConfig["topP"] = *req.TopP
 	}
 
 	// Handle Anthropic Tools declaration
@@ -432,16 +552,35 @@ func ConvertClaudeToGoogle(req *ClaudeRequest) (*GoogleRequest, string) {
 		}
 	}
 
-	// Pre-scan Claude tool_use calls to populate thought signatures
+	// Pre-scan Claude tool_use calls to populate thought signatures and tool names
 	callIDToThought := make(map[string]string)
+	callIDToName := make(map[string]string)
 	for _, msg := range req.Messages {
 		if arr, ok := msg.Content.([]any); ok {
 			for _, item := range arr {
 				if m, ok := item.(map[string]any); ok {
 					if t, _ := m["type"].(string); t == "tool_use" {
-						if id, _ := m["id"].(string); id != "" {
-							if cached, ok := GetToolCall(id); ok && cached.ThoughtSignature != "" {
+						id, _ := m["id"].(string)
+						name, _ := m["name"].(string)
+						if id != "" {
+							baseID, unpackedSig := UnpackCallID(id)
+							if name != "" {
+								callIDToName[id] = name
+								if baseID != id {
+									callIDToName[baseID] = name
+								}
+							}
+							if unpackedSig != "" {
+								callIDToThought[id] = unpackedSig
+								if baseID != id {
+									callIDToThought[baseID] = unpackedSig
+								}
+							} else if cached, ok := GetToolCall(id); ok && cached.ThoughtSignature != "" {
 								callIDToThought[id] = cached.ThoughtSignature
+							} else if baseID != id {
+								if cached, ok := GetToolCall(baseID); ok && cached.ThoughtSignature != "" {
+									callIDToThought[baseID] = cached.ThoughtSignature
+								}
 							}
 						}
 					}
@@ -456,7 +595,7 @@ func ConvertClaudeToGoogle(req *ClaudeRequest) (*GoogleRequest, string) {
 		if msg.Role == "assistant" {
 			role = "model"
 		}
-		parts := extractClaudeParts(msg.Content, callIDToThought)
+		parts := extractClaudeParts(msg.Content, callIDToThought, callIDToName)
 		if len(parts) > 0 {
 			if len(contents) > 0 && contents[len(contents)-1].Role == role {
 				contents[len(contents)-1].Parts = append(contents[len(contents)-1].Parts, parts...)
@@ -469,21 +608,7 @@ func ConvertClaudeToGoogle(req *ClaudeRequest) (*GoogleRequest, string) {
 		}
 	}
 
-	if len(contents) > 0 && contents[0].Role == "model" {
-		contents = append([]GoogleContent{{
-			Role:  "user",
-			Parts: []GooglePart{{Text: "Hello"}},
-		}}, contents...)
-	}
-
-	if len(contents) == 0 {
-		contents = append(contents, GoogleContent{
-			Role:  "user",
-			Parts: []GooglePart{{Text: "Hello"}},
-		})
-	}
-
-	gReq.Request.Contents = contents
+	gReq.Request.Contents = CleanAndSanitizeContents(contents)
 	return gReq, resolvedModel
 }
 
@@ -548,7 +673,7 @@ func extractOpenAIParts(content any) []GooglePart {
 	return nil
 }
 
-func extractClaudeParts(content any, callIDToThought map[string]string) []GooglePart {
+func extractClaudeParts(content any, callIDToThought, callIDToName map[string]string) []GooglePart {
 	if content == nil {
 		return nil
 	}
@@ -595,9 +720,21 @@ func extractClaudeParts(content any, callIDToThought map[string]string) []Google
 						inputObj = make(map[string]any)
 					}
 					argsBytes, _ := json.Marshal(inputObj)
+					baseID, unpackedSig := UnpackCallID(id)
 					thoughtSig := callIDToThought[id]
+					if thoughtSig == "" && baseID != id {
+						thoughtSig = callIDToThought[baseID]
+					}
+					if thoughtSig == "" && unpackedSig != "" {
+						thoughtSig = unpackedSig
+					}
 					if thoughtSig == "" {
 						if cached, ok := GetToolCall(id); ok {
+							thoughtSig = cached.ThoughtSignature
+						}
+					}
+					if thoughtSig == "" && baseID != id {
+						if cached, ok := GetToolCall(baseID); ok {
 							thoughtSig = cached.ThoughtSignature
 						}
 					}
@@ -608,7 +745,7 @@ func extractClaudeParts(content any, callIDToThought map[string]string) []Google
 							FunctionCall: &GoogleFuncCall{
 								Name: name,
 								Args: inputObj,
-								ID:   id,
+								ID:   baseID,
 							},
 						})
 					} else {
@@ -619,11 +756,35 @@ func extractClaudeParts(content any, callIDToThought map[string]string) []Google
 				case "tool_result":
 					toolUseID, _ := m["tool_use_id"].(string)
 					resultContent := extractText(m["content"])
-					name := ""
-					thoughtSig := ""
+					baseID, unpackedSig := UnpackCallID(toolUseID)
+					name := callIDToName[toolUseID]
+					if name == "" && baseID != toolUseID {
+						name = callIDToName[baseID]
+					}
+					thoughtSig := callIDToThought[toolUseID]
+					if thoughtSig == "" && baseID != toolUseID {
+						thoughtSig = callIDToThought[baseID]
+					}
+					if thoughtSig == "" && unpackedSig != "" {
+						thoughtSig = unpackedSig
+					}
 					if cached, ok := GetToolCall(toolUseID); ok {
-						name = cached.Name
-						thoughtSig = cached.ThoughtSignature
+						if name == "" {
+							name = cached.Name
+						}
+						if thoughtSig == "" {
+							thoughtSig = cached.ThoughtSignature
+						}
+					}
+					if (name == "" || thoughtSig == "") && baseID != toolUseID {
+						if cached, ok := GetToolCall(baseID); ok {
+							if name == "" {
+								name = cached.Name
+							}
+							if thoughtSig == "" {
+								thoughtSig = cached.ThoughtSignature
+							}
+						}
 					}
 					if name == "" {
 						name = "tool_result"
@@ -637,7 +798,7 @@ func extractClaudeParts(content any, callIDToThought map[string]string) []Google
 							FunctionResponse: &GoogleFuncResp{
 								Name:     name,
 								Response: respMap,
-								ID:       toolUseID,
+								ID:       baseID,
 							},
 						})
 					} else {
@@ -727,15 +888,16 @@ func ParseGoogleSSEChunk(raw []byte) (ParsedChunk, error) {
 				res.Thought = part.ThoughtSignature
 			}
 			if part.FunctionCall != nil {
-				callID := part.FunctionCall.ID
-				if callID == "" {
-					callID = GenerateID("call")
+				rawCallID := part.FunctionCall.ID
+				if rawCallID == "" {
+					rawCallID = GenerateID("call")
 				}
 				argsBytes, _ := json.Marshal(part.FunctionCall.Args)
-				RecordToolCall(callID, part.FunctionCall.Name, string(argsBytes), part.ThoughtSignature)
+				RecordToolCall(rawCallID, part.FunctionCall.Name, string(argsBytes), part.ThoughtSignature)
 
+				packedID := PackCallID(rawCallID, part.ThoughtSignature)
 				tc := OpenAIToolCall{
-					ID:   callID,
+					ID:   packedID,
 					Type: "function",
 				}
 				tc.Function.Name = part.FunctionCall.Name

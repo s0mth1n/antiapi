@@ -191,11 +191,17 @@ func (r *Registry) ResolveModel(userModel string) string {
 		"claude-sonnet-4.6":          "claude-sonnet-4-6",
 		"claude-sonnet-4.6-thinking": "claude-sonnet-4-6",
 		"claude-3-7-sonnet":          "claude-sonnet-4-6",
+		"claude-3.7-sonnet":          "claude-sonnet-4-6",
+		"claude-3-7-sonnet-20250219": "claude-sonnet-4-6",
 		"claude-3-5-sonnet":          "claude-sonnet-4-6",
+		"claude-3.5-sonnet":          "claude-sonnet-4-6",
+		"claude-3-5-sonnet-20241022": "claude-sonnet-4-6",
+		"claude-3-5-sonnet-latest":   "claude-sonnet-4-6",
 		"claude-sonnet":              "claude-sonnet-4-6",
 		"claude-opus-4-6":            "claude-opus-4-6-thinking",
 		"claude-opus-4.6":            "claude-opus-4-6-thinking",
 		"claude-opus-4-6-thinking":   "claude-opus-4-6-thinking",
+		"claude-3-opus":              "claude-opus-4-6-thinking",
 		"claude-opus":                "claude-opus-4-6-thinking",
 
 		// GPT & OSS
