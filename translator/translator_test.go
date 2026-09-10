@@ -410,3 +410,73 @@ func TestCleanAndSanitizeContents(t *testing.T) {
 		}
 	}
 }
+
+func TestOpenAIToolResponseNameMismatchResolution(t *testing.T) {
+	// Scenario: Client assistant turn called "tool_call", but client tool turn sent custom name "mcp__canva__search_brand_templates".
+	// The translated FunctionResponse must strictly match FunctionCall.Name ("tool_call") to avoid Google Cloud Code PA 400 INVALID_ARGUMENT.
+	sig := "authentic-thought-sig"
+	rawID := "call_test_123"
+	packedID := PackCallID(rawID, sig)
+
+	req := &OpenAIChatRequest{
+		Model: "gemini-3.8-flash-high",
+		Messages: []OpenAIMessage{
+			{Role: "user", Content: "Search Canva templates"},
+			{
+				Role: "assistant",
+				ToolCalls: []OpenAIToolCall{
+					{
+						ID:   packedID,
+						Type: "function",
+						Function: struct {
+							Name      string `json:"name"`
+							Arguments string `json:"arguments"`
+						}{
+							Name:      "tool_call",
+							Arguments: `{"arguments":{"user_intent":"Find templates"},"name":"mcp__canva__search_brand_templates"}`,
+						},
+					},
+				},
+			},
+			{
+				Role:       "tool",
+				ToolCallID: packedID,
+				Name:       "mcp__canva__search_brand_templates", // Client passes sub-tool name here
+				Content:    `{"result": "found 3 templates"}`,
+			},
+		},
+	}
+
+	gReq, _ := ConvertOpenAIToGoogle(req)
+	contents := gReq.Request.Contents
+
+	if len(contents) != 3 {
+		t.Fatalf("expected 3 turns, got %d", len(contents))
+	}
+
+	// Model turn: FunctionCall.Name must be "tool_call"
+	modelTurn := contents[1]
+	if modelTurn.Role != "model" || len(modelTurn.Parts) == 0 {
+		t.Fatalf("invalid model turn: %+v", modelTurn)
+	}
+	fc := modelTurn.Parts[0].FunctionCall
+	if fc == nil || fc.Name != "tool_call" {
+		t.Fatalf("expected model turn FunctionCall name 'tool_call', got %+v", fc)
+	}
+
+	// User turn: FunctionResponse.Name MUST match FunctionCall.Name ("tool_call"), NOT "mcp__canva__search_brand_templates"
+	userTurn := contents[2]
+	if userTurn.Role != "user" || len(userTurn.Parts) == 0 {
+		t.Fatalf("invalid user turn: %+v", userTurn)
+	}
+	fr := userTurn.Parts[0].FunctionResponse
+	if fr == nil {
+		t.Fatalf("expected user turn FunctionResponse part, got %+v", userTurn.Parts[0])
+	}
+	if fr.Name != "tool_call" {
+		t.Errorf("expected FunctionResponse.Name to match 'tool_call', got '%s'", fr.Name)
+	}
+	if fr.ID != rawID {
+		t.Errorf("expected FunctionResponse.ID '%s', got '%s'", rawID, fr.ID)
+	}
+}

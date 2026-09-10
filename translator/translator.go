@@ -256,15 +256,42 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 	for _, msg := range req.Messages {
 		for _, tc := range msg.ToolCalls {
 			if tc.ID != "" {
+				baseID, unpackedSig := UnpackCallID(tc.ID)
 				if tc.Function.Name != "" {
 					callIDToName[tc.ID] = tc.Function.Name
+					if baseID != tc.ID {
+						callIDToName[baseID] = tc.Function.Name
+					}
+				}
+				if unpackedSig != "" {
+					callIDToThought[tc.ID] = unpackedSig
+					if baseID != tc.ID {
+						callIDToThought[baseID] = unpackedSig
+					}
 				}
 				if cached, ok := GetToolCall(tc.ID); ok {
 					if tc.Function.Name == "" {
 						callIDToName[tc.ID] = cached.Name
+						if baseID != tc.ID {
+							callIDToName[baseID] = cached.Name
+						}
 					}
-					if cached.ThoughtSignature != "" {
+					if cached.ThoughtSignature != "" && callIDToThought[tc.ID] == "" {
 						callIDToThought[tc.ID] = cached.ThoughtSignature
+						if baseID != tc.ID {
+							callIDToThought[baseID] = cached.ThoughtSignature
+						}
+					}
+				} else if baseID != tc.ID {
+					if cached, ok := GetToolCall(baseID); ok {
+						if tc.Function.Name == "" {
+							callIDToName[tc.ID] = cached.Name
+							callIDToName[baseID] = cached.Name
+						}
+						if cached.ThoughtSignature != "" && callIDToThought[tc.ID] == "" {
+							callIDToThought[tc.ID] = cached.ThoughtSignature
+							callIDToThought[baseID] = cached.ThoughtSignature
+						}
 					}
 				}
 			}
@@ -357,10 +384,7 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 		// Handle tool response from user/tool
 		if msg.Role == "tool" {
 			baseID, unpackedSig := UnpackCallID(msg.ToolCallID)
-			funcName := msg.Name
-			if funcName == "" {
-				funcName = callIDToName[msg.ToolCallID]
-			}
+			funcName := callIDToName[msg.ToolCallID]
 			if funcName == "" && baseID != msg.ToolCallID {
 				funcName = callIDToName[baseID]
 			}
@@ -373,6 +397,9 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 				if cached, ok := GetToolCall(baseID); ok {
 					funcName = cached.Name
 				}
+			}
+			if funcName == "" {
+				funcName = msg.Name
 			}
 			if funcName == "" {
 				funcName = "tool_result"

@@ -134,15 +134,6 @@ func (a *Account) RecordError(statusCode int) {
 		log.Printf("[Pool] Account %s quarantined for 15m on 403 validation (until %s)", a.Email, a.QuarantinedUntil.Format(time.Kitchen))
 		return
 	}
-
-	if statusCode == http.StatusBadRequest { // 400
-		a.ConsecutiveErrors++
-		log.Printf("[Pool] Account %s recorded error #%d (status %d)", a.Email, a.ConsecutiveErrors, statusCode)
-		if a.ConsecutiveErrors >= 3 {
-			a.QuarantinedUntil = time.Now().Add(10 * time.Minute)
-			log.Printf("[Pool] Circuit breaker tripped for %s: quarantined for 10m to prevent account flagging (until %s)", a.Email, a.QuarantinedUntil.Format(time.Kitchen))
-		}
-	}
 }
 
 func (a *Account) GetAccessToken() (string, error) {

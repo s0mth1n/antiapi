@@ -344,7 +344,11 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	eventCh, err := s.upstreamClient.StreamGenerate(r.Context(), gReq)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":{"message":"%s"}}`, err.Error()), http.StatusBadGateway)
+		statusCode := http.StatusBadGateway
+		if strings.Contains(err.Error(), "(400)") {
+			statusCode = http.StatusBadRequest
+		}
+		http.Error(w, fmt.Sprintf(`{"error":{"message":"%s"}}`, err.Error()), statusCode)
 		return
 	}
 
@@ -426,7 +430,11 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 
 	eventCh, err := s.upstreamClient.StreamGenerate(r.Context(), gReq)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":{"message":"%s"}}`, err.Error()), http.StatusBadGateway)
+		statusCode := http.StatusBadGateway
+		if strings.Contains(err.Error(), "(400)") {
+			statusCode = http.StatusBadRequest
+		}
+		http.Error(w, fmt.Sprintf(`{"error":{"message":"%s"}}`, err.Error()), statusCode)
 		return
 	}
 

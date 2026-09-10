@@ -172,7 +172,6 @@ func (c *Client) StreamGenerate(ctx context.Context, payload any) (<-chan SSEEve
 
 			if resp.StatusCode == http.StatusBadRequest {
 				log.Printf("[Upstream] 400 Bad Request on %s: %s", acc.Email, string(body))
-				acc.RecordError(resp.StatusCode)
 				acc.Release()
 				return nil, fmt.Errorf("upstream rejected request (%d): %s", resp.StatusCode, string(body))
 			}
