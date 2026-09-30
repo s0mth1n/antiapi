@@ -106,31 +106,33 @@ func (s *Server) GetMetrics() (total, s2xx, s4xx, s5xx uint64, inFlight int64, a
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	metricInFlight.Add(1)
-	defer metricInFlight.Add(-1)
+	isPoll := tui.IsInternalPoll(r.URL.Path)
+	if !isPoll {
+		metricInFlight.Add(1)
+		defer metricInFlight.Add(-1)
+	}
 
 	start := time.Now()
 	lw := &statusLoggingResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 	s.mux.ServeHTTP(lw, r)
 	dur := time.Since(start)
 
-	metricTotalRequests.Add(1)
-	metricTotalDurUs.Add(uint64(dur.Microseconds()))
-	if lw.statusCode >= 200 && lw.statusCode < 300 {
-		metricStatus2xx.Add(1)
-	} else if lw.statusCode >= 400 && lw.statusCode < 500 {
-		metricStatus4xx.Add(1)
-	} else if lw.statusCode >= 500 {
-		metricStatus5xx.Add(1)
-	}
+	if !isPoll {
+		metricTotalRequests.Add(1)
+		metricTotalDurUs.Add(uint64(dur.Microseconds()))
+		if lw.statusCode >= 200 && lw.statusCode < 300 {
+			metricStatus2xx.Add(1)
+		} else if lw.statusCode >= 400 && lw.statusCode < 500 {
+			metricStatus4xx.Add(1)
+		} else if lw.statusCode >= 500 {
+			metricStatus5xx.Add(1)
+		}
 
-	clientIP := r.RemoteAddr
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		clientIP = strings.Split(xff, ",")[0]
-	}
+		clientIP := r.RemoteAddr
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			clientIP = strings.Split(xff, ",")[0]
+		}
 
-	// Record non-poll requests in logs
-	if !strings.HasPrefix(r.URL.Path, "/api/logs") && !strings.HasPrefix(r.URL.Path, "/health") {
 		recordRequestLog(RequestLog{
 			Timestamp: time.Now().Format("15:04:05"),
 			Method:    r.Method,
@@ -139,8 +141,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Duration:  fmt.Sprintf("%.1fms", float64(dur.Microseconds())/1000.0),
 			Status:    lw.statusCode,
 		})
-	}
-	if !tui.IsInternalPoll(r.URL.Path) {
+
 		durStr := fmt.Sprintf("%.2fs", dur.Seconds())
 		if dur < time.Second {
 			durStr = fmt.Sprintf("%dms", dur.Milliseconds())

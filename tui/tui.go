@@ -362,9 +362,9 @@ func truncateVisual(s string, maxLen int) string {
 // IsInternalPoll returns true for background health checks and dashboard polling routes.
 func IsInternalPoll(path string) bool {
 	switch path {
-	case "/api/status", "/api/logs", "/health", "/quota", "/api/show", "/api/tags", "/version", "/props", "/v1/props":
+	case "/api/status", "/api/logs", "/health", "/quota", "/api/show", "/api/tags", "/version", "/props", "/v1/props", "/favicon.ico":
 		return true
 	default:
-		return strings.HasPrefix(path, "/api/logs")
+		return strings.HasPrefix(path, "/api/logs") || strings.HasPrefix(path, "/api/status")
 	}
 }
