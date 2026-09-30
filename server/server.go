@@ -342,6 +342,8 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 
 	type ModelItem struct {
 		ID              string               `json:"id"`
+		Name            string               `json:"name,omitempty"`
+		DisplayName     string               `json:"display_name,omitempty"`
 		Object          string               `json:"object"`
 		Created         int64                `json:"created"`
 		OwnedBy         string               `json:"owned_by"`
@@ -356,6 +358,8 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	for _, m := range reg.GetAllModels() {
 		items = append(items, ModelItem{
 			ID:              m.ID,
+			Name:            m.Name,
+			DisplayName:     m.Name,
 			Object:          "model",
 			Created:         time.Now().Unix(),
 			OwnedBy:         "antigravity",
