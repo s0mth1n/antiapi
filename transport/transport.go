@@ -139,6 +139,17 @@ func NewStealthTransport() http.RoundTripper {
 	return st
 }
 
+func isConnectionClosedError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "closed network connection") ||
+		strings.Contains(msg, "connection reset by peer") ||
+		strings.Contains(msg, "broken pipe") ||
+		strings.Contains(msg, "eof")
+}
+
 func (st *StealthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if !st.useStealth || req.URL.Scheme != "https" {
 		return st.h1Transport.RoundTrip(req)
@@ -151,6 +162,19 @@ func (st *StealthTransport) RoundTrip(req *http.Request) (*http.Response, error)
 
 	if req.Context().Err() != nil {
 		return nil, req.Context().Err()
+	}
+
+	// If connection was closed or broken, close idle connections and retry once with fresh H2
+	if isConnectionClosedError(err) && req.GetBody != nil {
+		st.h2Transport.CloseIdleConnections()
+		if b, getErr := req.GetBody(); getErr == nil {
+			req.Body = b
+			resp2, err2 := st.h2Transport.RoundTrip(req)
+			if err2 == nil {
+				return resp2, nil
+			}
+			err = err2
+		}
 	}
 
 	// Rewind request body if consumed by H2 transport

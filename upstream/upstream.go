@@ -11,10 +11,12 @@ import (
 	"log"
 	"net/http"
 	"runtime"
+	"strings"
 	"time"
 
 	"antiapi/auth"
 	"antiapi/translator"
+	"antiapi/tui"
 )
 
 const (
@@ -43,15 +45,54 @@ func NewClient() *Client {
 }
 
 // StreamGenerate sends request to Google backend with automatic multi-account failover
+func getCapacityFallbackModel(model string) string {
+	switch strings.ToLower(strings.TrimSpace(model)) {
+	case "gemini-3.8-flash-high", "gemini-3.8-flash", "gemini-3.8", "gemini-3.8-high":
+		return "gemini-3.7-flash-high"
+	case "gemini-3.8-flash-medium", "gemini-3.8-medium":
+		return "gemini-3.7-flash-medium"
+	case "gemini-3.8-flash-low", "gemini-3.8-low":
+		return "gemini-3.7-flash-low"
+	default:
+		return ""
+	}
+}
+
+func extractModelName(payload any) string {
+	if gReq, ok := payload.(*translator.GoogleRequest); ok {
+		return gReq.Model
+	}
+	if reqMap, ok := payload.(map[string]any); ok {
+		if m, ok := reqMap["model"].(string); ok {
+			return m
+		}
+	}
+	return ""
+}
+
+func setModelName(payload any, model string) {
+	if gReq, ok := payload.(*translator.GoogleRequest); ok {
+		gReq.Model = model
+	} else if reqMap, ok := payload.(map[string]any); ok {
+		reqMap["model"] = model
+	}
+}
+
 func (c *Client) StreamGenerate(ctx context.Context, payload any) (<-chan SSEEvent, error) {
+	currentModel := extractModelName(payload)
+	triedFallback := false
+
+attempt:
 	pool := auth.GetPool()
 	totalAccounts := pool.Count()
+
 	if totalAccounts == 0 {
 		return nil, fmt.Errorf("no accounts available in pool")
 	}
 
 	maxAttempts := totalAccounts
 	var lastErr error
+	saw503Capacity := false
 	attemptedAccounts := make(map[string]bool)
 
 	for attempt := 0; attempt < maxAttempts; attempt++ {
@@ -176,13 +217,46 @@ func (c *Client) StreamGenerate(ctx context.Context, payload any) (<-chan SSEEve
 				return nil, fmt.Errorf("upstream rejected request (%d): %s", resp.StatusCode, string(body))
 			}
 
+			if resp.StatusCode == http.StatusServiceUnavailable || strings.Contains(string(body), "MODEL_CAPACITY_EXHAUSTED") || strings.Contains(string(body), "No capacity available") || (resp.StatusCode == 503 && strings.Contains(string(body), "UNAVAILABLE")) {
+				saw503Capacity = true
+				lastErr = fmt.Errorf("upstream model capacity unavailable (503): %s", string(body))
+				log.Printf("[Upstream] 503 Capacity Unavailable for %s (MODEL_CAPACITY_EXHAUSTED)", currentModel)
+
+				if !triedFallback {
+					fallbackModel := getCapacityFallbackModel(currentModel)
+					if fallbackModel != "" {
+						triedFallback = true
+						tui.SetActivity(fmt.Sprintf("[Failover] %s -> %s (503 capacity)", currentModel, fallbackModel))
+						log.Printf("[Failover] Model '%s' capacity exhausted upstream (503) -> immediately falling back to '%s'", currentModel, fallbackModel)
+						currentModel = fallbackModel
+						setModelName(payload, fallbackModel)
+						pool.ClearAllRateLimits()
+						acc.Release()
+						goto attempt
+					}
+				}
+				break
+			}
+
 			lastErr = fmt.Errorf("upstream error (%d): %s", resp.StatusCode, string(body))
 			log.Printf("[Upstream] Request to %s failed (%d): %s", base, resp.StatusCode, string(body))
 		}
-		if saw429 {
+		if saw429 && !saw503Capacity {
 			acc.RecordError(http.StatusTooManyRequests)
 		}
 		acc.Release()
+	}
+
+	if saw503Capacity && !triedFallback {
+		fallbackModel := getCapacityFallbackModel(currentModel)
+		if fallbackModel != "" {
+			triedFallback = true
+			log.Printf("[Failover] Model '%s' upstream capacity exhausted (503) -> falling back to '%s'", currentModel, fallbackModel)
+			currentModel = fallbackModel
+			setModelName(payload, fallbackModel)
+			pool.ClearAllRateLimits()
+			goto attempt
+		}
 	}
 
 	return nil, lastErr

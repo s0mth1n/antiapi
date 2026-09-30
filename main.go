@@ -4,25 +4,56 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"antiapi/auth"
 	"antiapi/models"
 	"antiapi/server"
+	"antiapi/tui"
 )
 
 func main() {
 	port := flag.Int("port", 8964, "Port to listen on")
 	host := flag.String("host", "0.0.0.0", "Host address to bind")
+	noTui := flag.Bool("no-tui", false, "Disable interactive TUI and use streaming logs")
 	flag.Parse()
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmsgprefix)
 	log.SetPrefix("[antiapi] ")
+
+	srv := server.NewServer()
+	addr := fmt.Sprintf("%s:%d", *host, *port)
+	httpServer := &http.Server{
+		Addr:    addr,
+		Handler: srv,
+	}
+
+	useTUI := !*noTui && tui.IsTerminal(os.Stdout.Fd())
+
+	var appTUI *tui.TUI
+	if useTUI {
+		homeDir, _ := os.UserHomeDir()
+		logDir := filepath.Join(homeDir, ".anti-api")
+		os.MkdirAll(logDir, 0755)
+		if logFile, err := os.OpenFile(filepath.Join(logDir, "antiapi.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+			log.SetOutput(logFile)
+		} else {
+			log.SetOutput(io.Discard)
+		}
+		appTUI = tui.Init(*port, srv)
+		appTUI.Start()
+		defer appTUI.Stop()
+	} else {
+		log.Printf("Starting AntiAPI Gateway v1.1.0 on http://%s", addr)
+		log.Printf("Dashboard: http://localhost:%d/ | OpenAI: http://localhost:%d/v1", *port, *port)
+	}
 
 	pool := auth.GetPool()
 	accCount := pool.Count()
@@ -52,39 +83,24 @@ func main() {
 		}
 	}()
 
-	srv := server.NewServer()
-	addr := fmt.Sprintf("%s:%d", *host, *port)
-	httpServer := &http.Server{
-		Addr:    addr,
-		Handler: srv,
-	}
-
-	banner := fmt.Sprintf(`
-======================================================================
-  Antigravity API Gateway (Go Edition - Multi-Account Pool)
-======================================================================
-  * Web Dashboard & Quota: http://localhost:%d/
-  * OpenAI Base URL:       http://localhost:%d/v1
-  * Chat Completions:      http://localhost:%d/v1/chat/completions
-  * Anthropic Messages:    http://localhost:%d/v1/messages
-  * Models List:           http://localhost:%d/v1/models
-  * Accounts In Pool:      %d active
-======================================================================
-`, *port, *port, *port, *port, *port, accCount)
-
-	fmt.Print(banner)
-
 	// Graceful shutdown
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server failed: %v", err)
+			if useTUI && appTUI != nil {
+				appTUI.Stop()
+			}
+			fmt.Fprintf(os.Stderr, "[antiapi] Server listen error: %v\n", err)
+			os.Exit(1)
 		}
 	}()
 
 	<-stop
+	if useTUI && appTUI != nil {
+		appTUI.Stop()
+	}
 	log.Println("Shutting down gracefully...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)

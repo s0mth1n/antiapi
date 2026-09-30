@@ -238,7 +238,7 @@ func TestFormatClaudeNonStreamToolCalls(t *testing.T) {
 		},
 	}
 
-	respBytes := FormatClaudeNonStream("msg-123", "claude-3-7-sonnet", "", toolCalls)
+	respBytes := FormatClaudeNonStream("msg-123", "claude-3-7-sonnet", "", toolCalls, nil)
 
 	var resp map[string]any
 	if err := json.Unmarshal(respBytes, &resp); err != nil {
@@ -478,5 +478,295 @@ func TestOpenAIToolResponseNameMismatchResolution(t *testing.T) {
 	}
 	if fr.ID != rawID {
 		t.Errorf("expected FunctionResponse.ID '%s', got '%s'", rawID, fr.ID)
+	}
+}
+
+func TestParseGoogleSSEChunkWithUsage(t *testing.T) {
+	raw := []byte(`{
+		"response": {
+			"candidates": [
+				{
+					"content": {
+						"parts": [{"text": "Hello world"}]
+					},
+					"finishReason": "STOP"
+				}
+			],
+			"usageMetadata": {
+				"promptTokenCount": 15,
+				"candidatesTokenCount": 2,
+				"totalTokenCount": 25,
+				"thoughtsTokenCount": 8,
+				"cachedContentTokenCount": 5
+			}
+		}
+	}`)
+
+	parsed, err := ParseGoogleSSEChunk(raw)
+	if err != nil {
+		t.Fatalf("ParseGoogleSSEChunk failed: %v", err)
+	}
+
+	if parsed.Usage == nil {
+		t.Fatalf("expected parsed.Usage != nil")
+	}
+	if parsed.Usage.PromptTokenCount != 15 {
+		t.Errorf("expected promptTokenCount 15, got %d", parsed.Usage.PromptTokenCount)
+	}
+	if parsed.Usage.ThoughtsTokenCount != 8 {
+		t.Errorf("expected thoughtsTokenCount 8, got %d", parsed.Usage.ThoughtsTokenCount)
+	}
+	if parsed.Usage.TotalTokenCount != 25 {
+		t.Errorf("expected totalTokenCount 25, got %d", parsed.Usage.TotalTokenCount)
+	}
+
+	// Test FormatOpenAIUsageChunk
+	chunk := FormatOpenAIUsageChunk("chatcmpl-test", "gemini-3.8-flash-high", parsed.Usage)
+	if !strings.HasPrefix(chunk, "data: ") {
+		t.Fatalf("expected data: prefix, got %s", chunk)
+	}
+	var chunkData struct {
+		Choices []any `json:"choices"`
+		Usage   struct {
+			PromptTokens            int            `json:"prompt_tokens"`
+			CompletionTokens        int            `json:"completion_tokens"`
+			TotalTokens             int            `json:"total_tokens"`
+			PromptTokensDetails     map[string]any `json:"prompt_tokens_details"`
+			CompletionTokensDetails map[string]any `json:"completion_tokens_details"`
+		} `json:"usage"`
+	}
+	jsonBytes := strings.TrimPrefix(chunk, "data: ")
+	jsonBytes = strings.TrimSpace(jsonBytes)
+	if err := json.Unmarshal([]byte(jsonBytes), &chunkData); err != nil {
+		t.Fatalf("failed to unmarshal usage chunk: %v", err)
+	}
+
+	if len(chunkData.Choices) != 0 {
+		t.Errorf("expected empty choices in usage chunk, got %d", len(chunkData.Choices))
+	}
+	if chunkData.Usage.PromptTokens != 15 {
+		t.Errorf("expected prompt_tokens 15, got %d", chunkData.Usage.PromptTokens)
+	}
+	if chunkData.Usage.CompletionTokens != 10 { // 2 candidates + 8 thoughts
+		t.Errorf("expected completion_tokens 10, got %d", chunkData.Usage.CompletionTokens)
+	}
+	if chunkData.Usage.TotalTokens != 25 {
+		t.Errorf("expected total_tokens 25, got %d", chunkData.Usage.TotalTokens)
+	}
+	if chunkData.Usage.CompletionTokensDetails["reasoning_tokens"].(float64) != 8 {
+		t.Errorf("expected reasoning_tokens 8, got %v", chunkData.Usage.CompletionTokensDetails["reasoning_tokens"])
+	}
+}
+
+func TestFormatOpenAINonStreamWithUsage(t *testing.T) {
+	u := &GoogleUsageMetadata{
+		PromptTokenCount:     20,
+		CandidatesTokenCount: 10,
+		TotalTokenCount:      30,
+		ThoughtsTokenCount:   5,
+	}
+	respBytes := FormatOpenAINonStream("cmpl-1", "gemini-3.8-flash-high", "Test response", "", nil, u)
+	var resp struct {
+		Usage struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+			TotalTokens      int `json:"total_tokens"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(respBytes, &resp); err != nil {
+		t.Fatalf("failed to unmarshal non-stream response: %v", err)
+	}
+	if resp.Usage.PromptTokens != 20 {
+		t.Errorf("expected prompt_tokens 20, got %d", resp.Usage.PromptTokens)
+	}
+	if resp.Usage.CompletionTokens != 15 { // 10 candidates + 5 thoughts
+		t.Errorf("expected completion_tokens 15, got %d", resp.Usage.CompletionTokens)
+	}
+	if resp.Usage.TotalTokens != 30 {
+		t.Errorf("expected total_tokens 30, got %d", resp.Usage.TotalTokens)
+	}
+}
+
+func TestFormatClaudeNonStreamWithUsage(t *testing.T) {
+	u := &GoogleUsageMetadata{
+		PromptTokenCount:     50,
+		CandidatesTokenCount: 25,
+		TotalTokenCount:      75,
+	}
+	respBytes := FormatClaudeNonStream("msg-1", "claude-sonnet-4-6", "Claude text", nil, u)
+	var resp struct {
+		Usage struct {
+			InputTokens  int `json:"input_tokens"`
+			OutputTokens int `json:"output_tokens"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(respBytes, &resp); err != nil {
+		t.Fatalf("failed to unmarshal Claude response: %v", err)
+	}
+	if resp.Usage.InputTokens != 50 {
+		t.Errorf("expected input_tokens 50, got %d", resp.Usage.InputTokens)
+	}
+	if resp.Usage.OutputTokens != 25 {
+		t.Errorf("expected output_tokens 25, got %d", resp.Usage.OutputTokens)
+	}
+}
+
+func TestSanitizeGoogleSchema(t *testing.T) {
+	// Recreate schema scenario with const in anyOf and unsupported JSON schema keys
+	rawSchema := map[string]any{
+		"$schema":              "http://json-schema.org/draft-07/schema#",
+		"type":                 "object",
+		"additionalProperties": false,
+		"required":             []any{"command", "action"},
+		"properties": map[string]any{
+			"command": map[string]any{
+				"type":        "string",
+				"description": "Command to run",
+			},
+			"action": map[string]any{
+				"description": "Action selector",
+				"anyOf": []any{
+					map[string]any{"const": "read", "description": "Read file"},
+					map[string]any{"const": "write", "description": "Write file"},
+					map[string]any{"const": 42},
+				},
+			},
+			"mode": map[string]any{
+				"oneOf": []any{
+					map[string]any{"type": "string"},
+					map[string]any{"type": "number"},
+				},
+			},
+		},
+	}
+
+	sanitized := SanitizeGoogleSchema(rawSchema)
+	sMap, ok := sanitized.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map[string]any, got %T", sanitized)
+	}
+
+	// Verify unsupported keys stripped
+	if _, hasSchema := sMap["$schema"]; hasSchema {
+		t.Errorf("expected $schema to be stripped")
+	}
+	if _, hasAddProps := sMap["additionalProperties"]; hasAddProps {
+		t.Errorf("expected additionalProperties to be stripped")
+	}
+
+	// Verify required
+	req, ok := sMap["required"].([]string)
+	if !ok || len(req) != 2 || req[0] != "command" || req[1] != "action" {
+		t.Errorf("unexpected required fields: %v", sMap["required"])
+	}
+
+	// Verify properties
+	props, ok := sMap["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected properties map")
+	}
+
+	actionProp, ok := props["action"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected action property map")
+	}
+
+	anyOf, ok := actionProp["anyOf"].([]any)
+	if !ok || len(anyOf) != 3 {
+		t.Fatalf("expected 3 anyOf elements, got %v", actionProp["anyOf"])
+	}
+
+	// Check const -> enum conversion
+	first := anyOf[0].(map[string]any)
+	if _, hasConst := first["const"]; hasConst {
+		t.Errorf("expected const to be removed from anyOf[0]")
+	}
+	enums, ok := first["enum"].([]string)
+	if !ok || len(enums) != 1 || enums[0] != "read" {
+		t.Errorf("expected enum ['read'], got %v", first["enum"])
+	}
+	if first["type"] != "string" {
+		t.Errorf("expected inferred type 'string', got %v", first["type"])
+	}
+
+	third := anyOf[2].(map[string]any)
+	if third["type"] != "number" && third["type"] != "integer" {
+		t.Errorf("expected inferred numeric type, got %v", third["type"])
+	}
+	enums3, ok := third["enum"].([]string)
+	if !ok || len(enums3) != 1 || enums3[0] != "42" {
+		t.Errorf("expected enum ['42'], got %v", third["enum"])
+	}
+
+	// Verify oneOf -> anyOf
+	modeProp, ok := props["mode"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected mode property map")
+	}
+	if _, hasOneOf := modeProp["oneOf"]; hasOneOf {
+		t.Errorf("expected oneOf to be stripped")
+	}
+	if _, hasAnyOf := modeProp["anyOf"]; !hasAnyOf {
+		t.Errorf("expected oneOf to be converted to anyOf")
+	}
+}
+
+func TestConvertOpenAIToGoogleWithSanitizedTools(t *testing.T) {
+	req := &OpenAIChatRequest{
+		Model: "gemini-3.8-flash-high",
+		Messages: []OpenAIMessage{
+			{Role: "user", Content: "Hello"},
+		},
+		Tools: []any{
+			map[string]any{
+				"type": "function",
+				"function": map[string]any{
+					"name":        "test_tool",
+					"description": "A tool with const",
+					"parameters": map[string]any{
+						"type":                 "object",
+						"additionalProperties": false,
+						"properties": map[string]any{
+							"command": map[string]any{
+								"anyOf": []any{
+									map[string]any{"const": "run"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	gReq, _ := ConvertOpenAIToGoogle(req)
+	if gReq == nil {
+		t.Fatalf("ConvertOpenAIToGoogle returned nil gReq")
+	}
+
+	if len(gReq.Request.Tools) == 0 {
+		t.Fatalf("expected tools in Google request")
+	}
+
+	toolMap := gReq.Request.Tools[0].(map[string]any)
+	funcs := toolMap["functionDeclarations"].([]map[string]any)
+	if len(funcs) != 1 {
+		t.Fatalf("expected 1 function declaration")
+	}
+
+	params := funcs[0]["parameters"].(map[string]any)
+	if _, hasAddProps := params["additionalProperties"]; hasAddProps {
+		t.Errorf("expected additionalProperties removed")
+	}
+
+	props := params["properties"].(map[string]any)
+	cmd := props["command"].(map[string]any)
+	anyOf := cmd["anyOf"].([]any)
+	elem := anyOf[0].(map[string]any)
+	if _, hasConst := elem["const"]; hasConst {
+		t.Errorf("expected const removed")
+	}
+	if elem["type"] != "string" {
+		t.Errorf("expected inferred type string")
 	}
 }

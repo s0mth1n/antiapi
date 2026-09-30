@@ -12,11 +12,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"antiapi/auth"
 	"antiapi/models"
 	"antiapi/translator"
+	"antiapi/tui"
 	"antiapi/upstream"
 	"antiapi/web"
 )
@@ -81,18 +83,54 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/", s.cors(s.handleDashboard))
 }
 
+var (
+	metricTotalRequests atomic.Uint64
+	metricStatus2xx     atomic.Uint64
+	metricStatus4xx     atomic.Uint64
+	metricStatus5xx     atomic.Uint64
+	metricInFlight      atomic.Int64
+	metricTotalDurUs    atomic.Uint64
+)
+
+func (s *Server) GetMetrics() (total, s2xx, s4xx, s5xx uint64, inFlight int64, avgMs float64) {
+	total = metricTotalRequests.Load()
+	s2xx = metricStatus2xx.Load()
+	s4xx = metricStatus4xx.Load()
+	s5xx = metricStatus5xx.Load()
+	inFlight = metricInFlight.Load()
+	durUs := metricTotalDurUs.Load()
+	if total > 0 {
+		avgMs = float64(durUs) / float64(total) / 1000.0
+	}
+	return
+}
+
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	metricInFlight.Add(1)
+	defer metricInFlight.Add(-1)
+
 	start := time.Now()
 	lw := &statusLoggingResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 	s.mux.ServeHTTP(lw, r)
 	dur := time.Since(start)
 
+	metricTotalRequests.Add(1)
+	metricTotalDurUs.Add(uint64(dur.Microseconds()))
+	if lw.statusCode >= 200 && lw.statusCode < 300 {
+		metricStatus2xx.Add(1)
+	} else if lw.statusCode >= 400 && lw.statusCode < 500 {
+		metricStatus4xx.Add(1)
+	} else if lw.statusCode >= 500 {
+		metricStatus5xx.Add(1)
+	}
+
+	clientIP := r.RemoteAddr
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		clientIP = strings.Split(xff, ",")[0]
+	}
+
 	// Record non-poll requests in logs
 	if !strings.HasPrefix(r.URL.Path, "/api/logs") && !strings.HasPrefix(r.URL.Path, "/health") {
-		clientIP := r.RemoteAddr
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			clientIP = strings.Split(xff, ",")[0]
-		}
 		recordRequestLog(RequestLog{
 			Timestamp: time.Now().Format("15:04:05"),
 			Method:    r.Method,
@@ -102,7 +140,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Status:    lw.statusCode,
 		})
 	}
-	log.Printf("[%s] %s %s (%v)", r.Method, r.URL.Path, r.RemoteAddr, dur)
+	if !tui.IsInternalPoll(r.URL.Path) {
+		durStr := fmt.Sprintf("%.2fs", dur.Seconds())
+		if dur < time.Second {
+			durStr = fmt.Sprintf("%dms", dur.Milliseconds())
+		}
+		tui.SetActivity(fmt.Sprintf("%s %s [%d] %s", r.Method, r.URL.Path, lw.statusCode, durStr))
+		log.Printf("[%s] %s %s [%d] (%s)", r.Method, r.URL.Path, clientIP, lw.statusCode, durStr)
+	}
 }
 
 func (s *Server) cors(next http.HandlerFunc) http.HandlerFunc {
@@ -296,10 +341,11 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	reg := models.GetRegistry()
 
 	type ModelItem struct {
-		ID      string `json:"id"`
-		Object  string `json:"object"`
-		Created int64  `json:"created"`
-		OwnedBy string `json:"owned_by"`
+		ID      string               `json:"id"`
+		Object  string               `json:"object"`
+		Created int64                `json:"created"`
+		OwnedBy string               `json:"owned_by"`
+		Pricing *models.ModelPricing `json:"pricing,omitempty"`
 	}
 
 	items := []ModelItem{}
@@ -309,6 +355,7 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 			Object:  "model",
 			Created: time.Now().Unix(),
 			OwnedBy: "antigravity",
+			Pricing: m.Pricing,
 		})
 	}
 
@@ -365,6 +412,8 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		var lastUsage *translator.GoogleUsageMetadata
+
 		for event := range eventCh {
 			if event.Err != nil {
 				log.Printf("[Chat] Stream error: %v", event.Err)
@@ -372,12 +421,25 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			}
 
 			parsed, err := translator.ParseGoogleSSEChunk(event.Data)
-			if err != nil || (parsed.Text == "" && parsed.ReasoningText == "" && parsed.FinishReason == "" && len(parsed.ToolCalls) == 0) {
+			if err != nil {
+				continue
+			}
+
+			if parsed.Usage != nil {
+				lastUsage = parsed.Usage
+			}
+
+			if parsed.Text == "" && parsed.ReasoningText == "" && parsed.FinishReason == "" && len(parsed.ToolCalls) == 0 {
 				continue
 			}
 
 			chunk := translator.FormatOpenAIChunk(completionID, resolvedModel, parsed.Text, parsed.ReasoningText, parsed.FinishReason, parsed.ToolCalls)
 			w.Write([]byte(chunk))
+			flusher.Flush()
+		}
+
+		if lastUsage != nil {
+			w.Write([]byte(translator.FormatOpenAIUsageChunk(completionID, resolvedModel, lastUsage)))
 			flusher.Flush()
 		}
 
@@ -389,11 +451,15 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	var fullText strings.Builder
 	var fullReasoning strings.Builder
 	var allToolCalls []translator.OpenAIToolCall
+	var lastUsage *translator.GoogleUsageMetadata
 	for event := range eventCh {
 		if event.Err != nil {
 			break
 		}
 		parsed, _ := translator.ParseGoogleSSEChunk(event.Data)
+		if parsed.Usage != nil {
+			lastUsage = parsed.Usage
+		}
 		fullText.WriteString(parsed.Text)
 		fullReasoning.WriteString(parsed.ReasoningText)
 		if len(parsed.ToolCalls) > 0 {
@@ -402,7 +468,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(translator.FormatOpenAINonStream(completionID, resolvedModel, fullText.String(), fullReasoning.String(), allToolCalls))
+	w.Write(translator.FormatOpenAINonStream(completionID, resolvedModel, fullText.String(), fullReasoning.String(), allToolCalls, lastUsage))
 }
 
 func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
@@ -434,7 +500,7 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(err.Error(), "(400)") {
 			statusCode = http.StatusBadRequest
 		}
-		http.Error(w, fmt.Sprintf(`{"error":{"message":"%s"}}`, err.Error()), statusCode)
+		http.Error(w, fmt.Sprintf(`{"type":"error","error":{"type":"api_error","message":"%s"}}`, err.Error()), statusCode)
 		return
 	}
 
@@ -451,22 +517,27 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		initPayload := map[string]any{
+		msgStart := map[string]any{
 			"type": "message_start",
 			"message": map[string]any{
-				"id":    msgID,
-				"type":  "message",
-				"role":  "assistant",
-				"model": resolvedModel,
-				"usage": map[string]int{"input_tokens": 10, "output_tokens": 0},
+				"id":            msgID,
+				"type":          "message",
+				"role":          "assistant",
+				"content":       []any{},
+				"model":         resolvedModel,
+				"stop_reason":   nil,
+				"stop_sequence": nil,
+				"usage":         map[string]int{"input_tokens": 10, "output_tokens": 1},
 			},
 		}
-		initBytes, _ := json.Marshal(initPayload)
-		w.Write([]byte(fmt.Sprintf("event: message_start\ndata: %s\n\n", string(initBytes))))
+		msBytes, _ := json.Marshal(msgStart)
+		fmt.Fprintf(w, "event: message_start\ndata: %s\n\n", msBytes)
+		flusher.Flush()
 
-		blockIndex := 0
 		textBlockStarted := false
+		blockIndex := 0
 		stopReason := "end_turn"
+		var lastUsage *translator.GoogleUsageMetadata
 
 		for event := range eventCh {
 			if event.Err != nil {
@@ -477,6 +548,10 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
+			if parsed.Usage != nil {
+				lastUsage = parsed.Usage
+			}
+
 			if parsed.Text != "" {
 				if !textBlockStarted {
 					blockStart := map[string]any{
@@ -485,7 +560,7 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 						"content_block": map[string]string{"type": "text", "text": ""},
 					}
 					bsBytes, _ := json.Marshal(blockStart)
-					w.Write([]byte(fmt.Sprintf("event: content_block_start\ndata: %s\n\n", string(bsBytes))))
+					fmt.Fprintf(w, "event: content_block_start\ndata: %s\n\n", bsBytes)
 					textBlockStarted = true
 				}
 
@@ -495,14 +570,14 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 					"delta": map[string]string{"type": "text_delta", "text": parsed.Text},
 				}
 				dBytes, _ := json.Marshal(ed)
-				w.Write([]byte(fmt.Sprintf("event: content_block_delta\ndata: %s\n\n", string(dBytes))))
+				fmt.Fprintf(w, "event: content_block_delta\ndata: %s\n\n", dBytes)
 				flusher.Flush()
 			}
 
 			if len(parsed.ToolCalls) > 0 {
 				stopReason = "tool_use"
 				if textBlockStarted {
-					w.Write([]byte(fmt.Sprintf("event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":%d}\n\n", blockIndex)))
+					fmt.Fprintf(w, "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":%d}\n\n", blockIndex)
 					blockIndex++
 					textBlockStarted = false
 				}
@@ -519,7 +594,7 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 						},
 					}
 					csbBytes, _ := json.Marshal(cbStart)
-					w.Write([]byte(fmt.Sprintf("event: content_block_start\ndata: %s\n\n", string(csbBytes))))
+					fmt.Fprintf(w, "event: content_block_start\ndata: %s\n\n", csbBytes)
 
 					cbDelta := map[string]any{
 						"type":  "content_block_delta",
@@ -530,9 +605,9 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 						},
 					}
 					cdBytes, _ := json.Marshal(cbDelta)
-					w.Write([]byte(fmt.Sprintf("event: content_block_delta\ndata: %s\n\n", string(cdBytes))))
+					fmt.Fprintf(w, "event: content_block_delta\ndata: %s\n\n", cdBytes)
 
-					w.Write([]byte(fmt.Sprintf("event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":%d}\n\n", blockIndex)))
+					fmt.Fprintf(w, "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":%d}\n\n", blockIndex)
 					blockIndex++
 				}
 				flusher.Flush()
@@ -540,7 +615,15 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if textBlockStarted {
-			w.Write([]byte(fmt.Sprintf("event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":%d}\n\n", blockIndex)))
+			fmt.Fprintf(w, "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":%d}\n\n", blockIndex)
+		}
+
+		outputTokens := 10
+		if lastUsage != nil {
+			outputTokens = lastUsage.CandidatesTokenCount + lastUsage.ThoughtsTokenCount
+			if outputTokens == 0 && lastUsage.TotalTokenCount > lastUsage.PromptTokenCount {
+				outputTokens = lastUsage.TotalTokenCount - lastUsage.PromptTokenCount
+			}
 		}
 
 		msgDelta := map[string]any{
@@ -549,10 +632,10 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 				"stop_reason":   stopReason,
 				"stop_sequence": nil,
 			},
-			"usage": map[string]int{"output_tokens": 10},
+			"usage": map[string]int{"output_tokens": outputTokens},
 		}
 		mdBytes, _ := json.Marshal(msgDelta)
-		w.Write([]byte(fmt.Sprintf("event: message_delta\ndata: %s\n\n", string(mdBytes))))
+		fmt.Fprintf(w, "event: message_delta\ndata: %s\n\n", mdBytes)
 
 		w.Write([]byte("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"))
 		flusher.Flush()
@@ -561,11 +644,15 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 
 	var fullText strings.Builder
 	var allToolCalls []translator.OpenAIToolCall
+	var lastUsage *translator.GoogleUsageMetadata
 	for event := range eventCh {
 		if event.Err != nil {
 			break
 		}
 		parsed, _ := translator.ParseGoogleSSEChunk(event.Data)
+		if parsed.Usage != nil {
+			lastUsage = parsed.Usage
+		}
 		fullText.WriteString(parsed.Text)
 		if len(parsed.ToolCalls) > 0 {
 			allToolCalls = append(allToolCalls, parsed.ToolCalls...)
@@ -573,7 +660,7 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(translator.FormatClaudeNonStream(msgID, resolvedModel, fullText.String(), allToolCalls))
+	w.Write(translator.FormatClaudeNonStream(msgID, resolvedModel, fullText.String(), allToolCalls, lastUsage))
 }
 
 func (s *Server) handleReorderAccounts(w http.ResponseWriter, r *http.Request) {

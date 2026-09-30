@@ -46,14 +46,19 @@ type OpenAIToolCall struct {
 	} `json:"function"`
 }
 
+type StreamOptions struct {
+	IncludeUsage bool `json:"include_usage"`
+}
+
 type OpenAIChatRequest struct {
-	Model       string          `json:"model"`
-	Messages    []OpenAIMessage `json:"messages"`
-	Stream      bool            `json:"stream"`
-	Temperature *float64        `json:"temperature,omitempty"`
-	TopP        *float64        `json:"top_p,omitempty"`
-	MaxTokens   *int            `json:"max_tokens,omitempty"`
-	Tools       []any           `json:"tools,omitempty"`
+	Model         string          `json:"model"`
+	Messages      []OpenAIMessage `json:"messages"`
+	Stream        bool            `json:"stream"`
+	StreamOptions *StreamOptions  `json:"stream_options,omitempty"`
+	Temperature   *float64        `json:"temperature,omitempty"`
+	TopP          *float64        `json:"top_p,omitempty"`
+	MaxTokens     *int            `json:"max_tokens,omitempty"`
+	Tools         []any           `json:"tools,omitempty"`
 }
 
 // Anthropic Data Structures
@@ -233,7 +238,7 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 							"description": fn["description"],
 						}
 						if params, hasParams := fn["parameters"]; hasParams {
-							decl["parameters"] = params
+							decl["parameters"] = SanitizeGoogleSchema(params)
 						}
 						funcDecls = append(funcDecls, decl)
 					}
@@ -552,9 +557,9 @@ func ConvertClaudeToGoogle(req *ClaudeRequest) (*GoogleRequest, string) {
 					"description": desc,
 				}
 				if schema, hasSchema := tm["input_schema"]; hasSchema {
-					decl["parameters"] = schema
+					decl["parameters"] = SanitizeGoogleSchema(schema)
 				} else if params, hasParams := tm["parameters"]; hasParams {
-					decl["parameters"] = params
+					decl["parameters"] = SanitizeGoogleSchema(params)
 				}
 				funcDecls = append(funcDecls, decl)
 			}
@@ -866,6 +871,14 @@ func extractText(content any) string {
 	return fmt.Sprintf("%v", content)
 }
 
+type GoogleUsageMetadata struct {
+	PromptTokenCount        int `json:"promptTokenCount"`
+	CandidatesTokenCount    int `json:"candidatesTokenCount"`
+	TotalTokenCount         int `json:"totalTokenCount"`
+	ThoughtsTokenCount      int `json:"thoughtsTokenCount"`
+	CachedContentTokenCount int `json:"cachedContentTokenCount"`
+}
+
 type ParsedChunk struct {
 	Text             string
 	ReasoningText    string
@@ -873,9 +886,10 @@ type ParsedChunk struct {
 	ThoughtSignature string
 	FinishReason     string
 	ToolCalls        []OpenAIToolCall
+	Usage            *GoogleUsageMetadata
 }
 
-// ParseGoogleSSEChunk extracts text, thought, finish reason, and function calls
+// ParseGoogleSSEChunk extracts text, thought, finish reason, function calls, and usageMetadata
 func ParseGoogleSSEChunk(raw []byte) (ParsedChunk, error) {
 	var chunk struct {
 		Response struct {
@@ -886,12 +900,20 @@ func ParseGoogleSSEChunk(raw []byte) (ParsedChunk, error) {
 				} `json:"content"`
 				FinishReason string `json:"finishReason"`
 			} `json:"candidates"`
+			UsageMetadata *GoogleUsageMetadata `json:"usageMetadata"`
 		} `json:"response"`
+		UsageMetadata *GoogleUsageMetadata `json:"usageMetadata"`
 	}
 
 	res := ParsedChunk{}
 	if err := json.Unmarshal(raw, &chunk); err != nil {
 		return res, err
+	}
+
+	if chunk.Response.UsageMetadata != nil {
+		res.Usage = chunk.Response.UsageMetadata
+	} else if chunk.UsageMetadata != nil {
+		res.Usage = chunk.UsageMetadata
 	}
 
 	if len(chunk.Response.Candidates) > 0 {
@@ -937,6 +959,38 @@ func ParseGoogleSSEChunk(raw []byte) (ParsedChunk, error) {
 	}
 
 	return res, nil
+}
+
+// FormatOpenAIUsageChunk formats the final usage chunk for OpenAI streaming clients (stream_options: {"include_usage": true})
+func FormatOpenAIUsageChunk(id, model string, u *GoogleUsageMetadata) string {
+	if u == nil {
+		return ""
+	}
+	completionTokens := u.CandidatesTokenCount + u.ThoughtsTokenCount
+	if completionTokens == 0 && u.TotalTokenCount > u.PromptTokenCount {
+		completionTokens = u.TotalTokenCount - u.PromptTokenCount
+	}
+
+	payload := map[string]any{
+		"id":      id,
+		"object":  "chat.completion.chunk",
+		"created": time.Now().Unix(),
+		"model":   model,
+		"choices": []any{},
+		"usage": map[string]any{
+			"prompt_tokens":     u.PromptTokenCount,
+			"completion_tokens": completionTokens,
+			"total_tokens":      u.TotalTokenCount,
+			"prompt_tokens_details": map[string]any{
+				"cached_tokens": u.CachedContentTokenCount,
+			},
+			"completion_tokens_details": map[string]any{
+				"reasoning_tokens": u.ThoughtsTokenCount,
+			},
+		},
+	}
+	b, _ := json.Marshal(payload)
+	return "data: " + string(b) + "\n\n"
 }
 
 // FormatOpenAIChunk formats an incremental delta for OpenAI streaming client
@@ -1019,7 +1073,7 @@ func FormatOpenAIChunk(id, model, text, reasoningText, finishReason string, tool
 }
 
 // FormatOpenAINonStream formats full response for non-streaming clients
-func FormatOpenAINonStream(id, model, content, reasoningContent string, toolCalls []OpenAIToolCall) []byte {
+func FormatOpenAINonStream(id, model, content, reasoningContent string, toolCalls []OpenAIToolCall, u *GoogleUsageMetadata) []byte {
 	type Message struct {
 		Role             string           `json:"role"`
 		Content          *string          `json:"content"`
@@ -1032,11 +1086,12 @@ func FormatOpenAINonStream(id, model, content, reasoningContent string, toolCall
 		FinishReason string  `json:"finish_reason"`
 	}
 	type Response struct {
-		ID      string   `json:"id"`
-		Object  string   `json:"object"`
-		Created int64    `json:"created"`
-		Model   string   `json:"model"`
-		Choices []Choice `json:"choices"`
+		ID      string         `json:"id"`
+		Object  string         `json:"object"`
+		Created int64          `json:"created"`
+		Model   string         `json:"model"`
+		Choices []Choice       `json:"choices"`
+		Usage   map[string]any `json:"usage,omitempty"`
 	}
 
 	var contentPtr *string
@@ -1073,12 +1128,30 @@ func FormatOpenAINonStream(id, model, content, reasoningContent string, toolCall
 		},
 	}
 
+	if u != nil {
+		completionTokens := u.CandidatesTokenCount + u.ThoughtsTokenCount
+		if completionTokens == 0 && u.TotalTokenCount > u.PromptTokenCount {
+			completionTokens = u.TotalTokenCount - u.PromptTokenCount
+		}
+		res.Usage = map[string]any{
+			"prompt_tokens":     u.PromptTokenCount,
+			"completion_tokens": completionTokens,
+			"total_tokens":      u.TotalTokenCount,
+			"prompt_tokens_details": map[string]any{
+				"cached_tokens": u.CachedContentTokenCount,
+			},
+			"completion_tokens_details": map[string]any{
+				"reasoning_tokens": u.ThoughtsTokenCount,
+			},
+		}
+	}
+
 	bytes, _ := json.Marshal(res)
 	return bytes
 }
 
 // FormatClaudeNonStream formats response for Anthropic clients
-func FormatClaudeNonStream(id, model, content string, toolCalls []OpenAIToolCall) []byte {
+func FormatClaudeNonStream(id, model, content string, toolCalls []OpenAIToolCall, u *GoogleUsageMetadata) []byte {
 	type ClaudeContentBlock struct {
 		Type  string         `json:"type"`
 		Text  string         `json:"text,omitempty"`
@@ -1093,6 +1166,7 @@ func FormatClaudeNonStream(id, model, content string, toolCalls []OpenAIToolCall
 		Content    []ClaudeContentBlock `json:"content"`
 		Model      string               `json:"model"`
 		StopReason string               `json:"stop_reason"`
+		Usage      map[string]int       `json:"usage"`
 	}
 
 	var blocks []ClaudeContentBlock
@@ -1117,6 +1191,13 @@ func FormatClaudeNonStream(id, model, content string, toolCalls []OpenAIToolCall
 		stopReason = "tool_use"
 	}
 
+	inputTokens := 0
+	outputTokens := 0
+	if u != nil {
+		inputTokens = u.PromptTokenCount
+		outputTokens = u.CandidatesTokenCount + u.ThoughtsTokenCount
+	}
+
 	res := Response{
 		ID:         id,
 		Type:       "message",
@@ -1124,8 +1205,167 @@ func FormatClaudeNonStream(id, model, content string, toolCalls []OpenAIToolCall
 		Content:    blocks,
 		Model:      model,
 		StopReason: stopReason,
+		Usage: map[string]int{
+			"input_tokens":  inputTokens,
+			"output_tokens": outputTokens,
+		},
 	}
 
 	bytes, _ := json.Marshal(res)
 	return bytes
+}
+
+// SanitizeGoogleSchema recursively sanitizes an OpenAPI/JSON Schema so it strictly matches
+// Google's Protobuf Schema specification. It removes unsupported fields (such as 'const',
+// '$schema', 'additionalProperties', 'definitions', etc.) and converts 'const' to 'enum'.
+func SanitizeGoogleSchema(v any) any {
+	if v == nil {
+		return nil
+	}
+
+	switch val := v.(type) {
+	case []any:
+		res := make([]any, len(val))
+		for i, elem := range val {
+			res[i] = SanitizeGoogleSchema(elem)
+		}
+		return res
+
+	case map[string]any:
+		clean := make(map[string]any)
+
+		// 1. Convert 'const' to 'enum' and infer 'type' if absent
+		if constVal, hasConst := val["const"]; hasConst {
+			if _, hasEnum := val["enum"]; !hasEnum {
+				val["enum"] = []any{fmt.Sprintf("%v", constVal)}
+			}
+			if _, hasType := val["type"]; !hasType {
+				switch constVal.(type) {
+				case string:
+					val["type"] = "string"
+				case int, int8, int16, int32, int64:
+					val["type"] = "integer"
+				case float32, float64:
+					val["type"] = "number"
+				case bool:
+					val["type"] = "boolean"
+				default:
+					val["type"] = "string"
+				}
+			}
+			delete(val, "const")
+		}
+
+		// 2. Convert 'oneOf' to 'anyOf' if 'anyOf' is not already present
+		if oneOf, hasOneOf := val["oneOf"]; hasOneOf {
+			if _, hasAnyOf := val["anyOf"]; !hasAnyOf {
+				val["anyOf"] = oneOf
+			}
+			delete(val, "oneOf")
+		}
+		if oneOf, hasOneOf := val["one_of"]; hasOneOf {
+			if _, hasAnyOf := val["any_of"]; !hasAnyOf {
+				val["any_of"] = oneOf
+			}
+			delete(val, "one_of")
+		}
+
+		// Allowed keys per Google Generative Language content.proto Schema definition
+		allowedKeys := map[string]bool{
+			"type":              true,
+			"format":            true,
+			"title":             true,
+			"description":       true,
+			"nullable":          true,
+			"enum":              true,
+			"items":             true,
+			"maxItems":          true,
+			"max_items":         true,
+			"minItems":          true,
+			"min_items":         true,
+			"properties":        true,
+			"required":          true,
+			"minProperties":     true,
+			"min_properties":    true,
+			"maxProperties":     true,
+			"max_properties":    true,
+			"minimum":           true,
+			"maximum":           true,
+			"minLength":         true,
+			"min_length":        true,
+			"maxLength":         true,
+			"max_length":        true,
+			"pattern":           true,
+			"example":           true,
+			"anyOf":             true,
+			"any_of":            true,
+			"propertyOrdering":  true,
+			"property_ordering": true,
+			"default":           true,
+		}
+
+		for k, v := range val {
+			if !allowedKeys[k] {
+				continue
+			}
+
+			switch k {
+			case "properties":
+				if props, ok := v.(map[string]any); ok {
+					cleanProps := make(map[string]any)
+					for pk, pv := range props {
+						cleanProps[pk] = SanitizeGoogleSchema(pv)
+					}
+					clean[k] = cleanProps
+				}
+			case "items":
+				clean[k] = SanitizeGoogleSchema(v)
+			case "anyOf", "any_of":
+				if anyOfList, ok := v.([]any); ok {
+					cleanAnyOf := make([]any, len(anyOfList))
+					for i, elem := range anyOfList {
+						cleanAnyOf[i] = SanitizeGoogleSchema(elem)
+					}
+					clean[k] = cleanAnyOf
+				}
+			case "enum":
+				switch ev := v.(type) {
+				case []any:
+					strEnum := make([]string, len(ev))
+					for i, e := range ev {
+						strEnum[i] = fmt.Sprintf("%v", e)
+					}
+					clean[k] = strEnum
+				case []string:
+					clean[k] = ev
+				default:
+					clean[k] = v
+				}
+			case "required":
+				switch rv := v.(type) {
+				case []any:
+					strReq := make([]string, 0, len(rv))
+					for _, r := range rv {
+						if s, ok := r.(string); ok && s != "" {
+							strReq = append(strReq, s)
+						}
+					}
+					if len(strReq) > 0 {
+						clean[k] = strReq
+					}
+				case []string:
+					if len(rv) > 0 {
+						clean[k] = rv
+					}
+				}
+			default:
+				clean[k] = v
+			}
+		}
+
+		return clean
+
+	default:
+		return v
+	}
 }

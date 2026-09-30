@@ -40,7 +40,7 @@ type Account struct {
 
 func (a *Account) getSem() chan struct{} {
 	a.semOnce.Do(func() {
-		maxConc := 2
+		maxConc := 4
 		if envVal := os.Getenv("ANTIAPI_MAX_CONCURRENCY"); envVal != "" {
 			if parsed, err := strconv.Atoi(envVal); err == nil && parsed > 0 {
 				maxConc = parsed
@@ -49,6 +49,11 @@ func (a *Account) getSem() chan struct{} {
 		a.sem = make(chan struct{}, maxConc)
 	})
 	return a.sem
+}
+
+func (a *Account) AvailableSlots() int {
+	sem := a.getSem()
+	return cap(sem) - len(sem)
 }
 
 func (a *Account) Acquire(ctx context.Context) error {
@@ -488,7 +493,20 @@ func (p *AccountPool) NextAvailableAccount(exclude ...map[string]bool) (*Account
 		excluded = exclude[0]
 	}
 
-	// Priority 1: Check accounts that are available AND have healthy remaining quota (> 5%)
+	// Priority 1: Check accounts that are available, have healthy quota, AND have available concurrency slots
+	for i := 0; i < n; i++ {
+		idx := (p.currentIndex + i) % n
+		acc := p.accounts[idx]
+		if excluded != nil && excluded[acc.Email] {
+			continue
+		}
+		if acc.IsAvailable() && acc.HasHealthyQuota() && acc.AvailableSlots() > 0 {
+			p.currentIndex = (idx + 1) % n
+			return acc, nil
+		}
+	}
+
+	// Priority 2: Check accounts that are available AND have healthy remaining quota (> 5%)
 	for i := 0; i < n; i++ {
 		idx := (p.currentIndex + i) % n
 		acc := p.accounts[idx]
@@ -565,6 +583,14 @@ func (p *AccountPool) ReorderAccounts(orderedEmails []string) error {
 	p.currentIndex = 0
 	log.Printf("[Pool] Reordered accounts by priority: %v", orderedEmails)
 	return p.saveLocked()
+}
+
+func (p *AccountPool) ClearAllRateLimits() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, a := range p.accounts {
+		a.ClearRateLimit()
+	}
 }
 
 func (p *AccountPool) GetAllAccounts() []*Account {
