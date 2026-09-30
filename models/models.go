@@ -30,11 +30,13 @@ type ModelPricing struct {
 }
 
 type ModelInfo struct {
-	ID        string        `json:"id"`
-	Name      string        `json:"name"`
-	Tier      string        `json:"tier"`
-	QuotaInfo ModelQuota    `json:"quota_info"`
-	Pricing   *ModelPricing `json:"pricing,omitempty"`
+	ID              string        `json:"id"`
+	Name            string        `json:"name"`
+	Tier            string        `json:"tier"`
+	ContextWindow   int           `json:"context_window,omitempty"`
+	MaxOutputTokens int           `json:"max_output_tokens,omitempty"`
+	QuotaInfo       ModelQuota    `json:"quota_info"`
+	Pricing         *ModelPricing `json:"pricing,omitempty"`
 }
 
 type Registry struct {
@@ -62,16 +64,21 @@ func GetRegistry() *Registry {
 
 // CuratedSupportedModels defines the clean, official models exposed via /v1/models
 var CuratedSupportedModels = []ModelInfo{
-	{ID: "claude-sonnet-4-6", Name: "Claude Sonnet 4.6", Tier: "Claude", Pricing: &ModelPricing{Prompt: "0.000003", Completion: "0.000015"}},
-	{ID: "claude-opus-4-6-thinking", Name: "Claude Opus 4.6 (Thinking)", Tier: "Claude", Pricing: &ModelPricing{Prompt: "0.000015", Completion: "0.000075"}},
-	{ID: "gemini-3.8-flash-high", Name: "Gemini 3.8 Flash (High)", Tier: "Gemini Flash", Pricing: &ModelPricing{Prompt: "0.00000075", Completion: "0.00000375"}},
-	{ID: "gemini-3.8-flash-medium", Name: "Gemini 3.8 Flash (Medium)", Tier: "Gemini Flash", Pricing: &ModelPricing{Prompt: "0.0000005", Completion: "0.0000025"}},
-	{ID: "gemini-3.8-flash-low", Name: "Gemini 3.8 Flash (Low)", Tier: "Gemini Flash", Pricing: &ModelPricing{Prompt: "0.00000025", Completion: "0.00000125"}},
-	{ID: "gemini-3.7-flash-high", Name: "Gemini 3.7 Flash (High)", Tier: "Gemini Flash", Pricing: &ModelPricing{Prompt: "0.00000075", Completion: "0.00000375"}},
-	{ID: "gemini-3.7-flash-medium", Name: "Gemini 3.7 Flash (Medium)", Tier: "Gemini Flash", Pricing: &ModelPricing{Prompt: "0.0000005", Completion: "0.0000025"}},
-	{ID: "gemini-3.6-flash-medium", Name: "Gemini 3.6 Flash (Medium)", Tier: "Gemini Flash", Pricing: &ModelPricing{Prompt: "0.0000005", Completion: "0.0000025"}},
-	{ID: "gemini-3.1-pro-high", Name: "Gemini 3.1 Pro (High)", Tier: "Gemini Pro", Pricing: &ModelPricing{Prompt: "0.00000125", Completion: "0.000005"}},
-	{ID: "gpt-oss-120b-medium", Name: "GPT-OSS 120B (Medium)", Tier: "GPT", Pricing: &ModelPricing{Prompt: "0.0000005", Completion: "0.0000025"}},
+	{ID: "claude-sonnet-4-6", Name: "Claude Sonnet 4.6", Tier: "Claude", ContextWindow: 1048576, MaxOutputTokens: 131072, Pricing: &ModelPricing{Prompt: "0.000003", Completion: "0.000015"}},
+	{ID: "claude-opus-4-6", Name: "Claude Opus 4.6", Tier: "Claude", ContextWindow: 1048576, MaxOutputTokens: 131072, Pricing: &ModelPricing{Prompt: "0.000015", Completion: "0.000075"}},
+	{ID: "claude-opus-4-6-thinking", Name: "Claude Opus 4.6 (Thinking)", Tier: "Claude", ContextWindow: 1048576, MaxOutputTokens: 131072, Pricing: &ModelPricing{Prompt: "0.000015", Completion: "0.000075"}},
+	{ID: "gemini-3.8-flash", Name: "Gemini 3.8 Flash", Tier: "Gemini Flash", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.00000075", Completion: "0.00000375"}},
+	{ID: "gemini-3.8-flash-high", Name: "Gemini 3.8 Flash (High)", Tier: "Gemini Flash", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.00000075", Completion: "0.00000375"}},
+	{ID: "gemini-3.8-flash-medium", Name: "Gemini 3.8 Flash (Medium)", Tier: "Gemini Flash", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.0000005", Completion: "0.0000025"}},
+	{ID: "gemini-3.8-flash-low", Name: "Gemini 3.8 Flash (Low)", Tier: "Gemini Flash", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.00000025", Completion: "0.00000125"}},
+	{ID: "gemini-3.7-flash", Name: "Gemini 3.7 Flash", Tier: "Gemini Flash", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.00000075", Completion: "0.00000375"}},
+	{ID: "gemini-3.7-flash-high", Name: "Gemini 3.7 Flash (High)", Tier: "Gemini Flash", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.00000075", Completion: "0.00000375"}},
+	{ID: "gemini-3.7-flash-medium", Name: "Gemini 3.7 Flash (Medium)", Tier: "Gemini Flash", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.0000005", Completion: "0.0000025"}},
+	{ID: "gemini-3.6-flash", Name: "Gemini 3.6 Flash", Tier: "Gemini Flash", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.0000005", Completion: "0.0000025"}},
+	{ID: "gemini-3.6-flash-medium", Name: "Gemini 3.6 Flash (Medium)", Tier: "Gemini Flash", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.0000005", Completion: "0.0000025"}},
+	{ID: "gemini-3.1-pro", Name: "Gemini 3.1 Pro", Tier: "Gemini Pro", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.00000125", Completion: "0.000005"}},
+	{ID: "gemini-3.1-pro-high", Name: "Gemini 3.1 Pro (High)", Tier: "Gemini Pro", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.00000125", Completion: "0.000005"}},
+	{ID: "gpt-oss-120b-medium", Name: "GPT-OSS 120B (Medium)", Tier: "GPT", ContextWindow: 131072, MaxOutputTokens: 8192, Pricing: &ModelPricing{Prompt: "0.0000005", Completion: "0.0000025"}},
 }
 
 func (r *Registry) initDefaults() {

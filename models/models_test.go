@@ -55,3 +55,34 @@ func TestCuratedModelsContainsMedium(t *testing.T) {
 		t.Fatalf("expected gemini-3.8-flash-medium in GetAllModels(), but not found")
 	}
 }
+
+func TestCuratedModelsContextLimits(t *testing.T) {
+	reg := GetRegistry()
+	models := reg.GetAllModels()
+
+	expectedCanonical := map[string]int{
+		"claude-sonnet-4-6": 1048576,
+		"claude-opus-4-6":   1048576,
+		"gemini-3.8-flash":  1048576,
+		"gemini-3.7-flash":  1048576,
+	}
+
+	for id, expectedCtx := range expectedCanonical {
+		var found bool
+		for _, m := range models {
+			if m.ID == id {
+				found = true
+				if m.ContextWindow != expectedCtx {
+					t.Errorf("model %s ContextWindow = %d; want %d", id, m.ContextWindow, expectedCtx)
+				}
+				if m.MaxOutputTokens <= 0 {
+					t.Errorf("model %s MaxOutputTokens = %d; want > 0", id, m.MaxOutputTokens)
+				}
+				break
+			}
+		}
+		if !found {
+			t.Errorf("model %s not found in GetAllModels()", id)
+		}
+	}
+}

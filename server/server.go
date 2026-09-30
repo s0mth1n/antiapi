@@ -341,21 +341,29 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	reg := models.GetRegistry()
 
 	type ModelItem struct {
-		ID      string               `json:"id"`
-		Object  string               `json:"object"`
-		Created int64                `json:"created"`
-		OwnedBy string               `json:"owned_by"`
-		Pricing *models.ModelPricing `json:"pricing,omitempty"`
+		ID              string               `json:"id"`
+		Object          string               `json:"object"`
+		Created         int64                `json:"created"`
+		OwnedBy         string               `json:"owned_by"`
+		ContextWindow   int                  `json:"context_window,omitempty"`
+		MaxOutputTokens int                  `json:"max_output_tokens,omitempty"`
+		ContextLength   int                  `json:"context_length,omitempty"`
+		MaxTokens       int                  `json:"max_tokens,omitempty"`
+		Pricing         *models.ModelPricing `json:"pricing,omitempty"`
 	}
 
 	items := []ModelItem{}
 	for _, m := range reg.GetAllModels() {
 		items = append(items, ModelItem{
-			ID:      m.ID,
-			Object:  "model",
-			Created: time.Now().Unix(),
-			OwnedBy: "antigravity",
-			Pricing: m.Pricing,
+			ID:              m.ID,
+			Object:          "model",
+			Created:         time.Now().Unix(),
+			OwnedBy:         "antigravity",
+			ContextWindow:   m.ContextWindow,
+			MaxOutputTokens: m.MaxOutputTokens,
+			ContextLength:   m.ContextWindow,
+			MaxTokens:       m.MaxOutputTokens,
+			Pricing:         m.Pricing,
 		})
 	}
 
