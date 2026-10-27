@@ -1,0 +1,5 @@
+build/
+keystore/
+assets/accounts.json
+assets/antiapi
+src/io/antiapi/android/R.java

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AntiAPI</string>
+    <string name="server_title">AntiAPI Gateway</string>
+    <string name="server_desc">Local OpenAI &amp; Anthropic Server</string>
+    <string name="btn_start">Start Server</string>
+    <string name="btn_stop">Stop Server</string>
+    <string name="btn_dashboard">Open Web Dashboard</string>
+    <string name="status_stopped">Status: Stopped</string>
+    <string name="status_running">Status: Running on :8964</string>
+</resources>

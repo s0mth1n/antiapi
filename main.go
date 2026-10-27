@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -20,7 +22,24 @@ import (
 	"antiapi/tunnel"
 )
 
+func initAndroidDNS() {
+	if runtime.GOOS == "android" || os.Getenv("ANDROID_ROOT") != "" {
+		net.DefaultResolver = &net.Resolver{
+			PreferGo: true,
+			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+				d := net.Dialer{Timeout: 3 * time.Second}
+				conn, err := d.DialContext(ctx, "udp", "1.1.1.1:53")
+				if err != nil {
+					return d.DialContext(ctx, "udp", "8.8.8.8:53")
+				}
+				return conn, nil
+			},
+		}
+	}
+}
+
 func main() {
+	initAndroidDNS()
 	port := flag.Int("port", 8964, "Port to listen on")
 	host := flag.String("host", "0.0.0.0", "Host address to bind")
 	noTui := flag.Bool("no-tui", false, "Disable interactive TUI and use streaming logs")
