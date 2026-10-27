@@ -36,7 +36,8 @@ public class AntiApiService extends Service {
     private Process serverProcess;
     private boolean isRunning = false;
     private final List<LogListener> listeners = new ArrayList<>();
-    private final StringBuilder logBuffer = new StringBuilder();
+    private static final int MAX_LOG_LINES = 150;
+    private final List<String> logLines = new ArrayList<>();
 
     private String publicTunnelUrl = "";
 
@@ -175,28 +176,7 @@ public class AntiApiService extends Service {
     }
 
     private File findExecutable() {
-        File nativeLib = new File(getApplicationInfo().nativeLibraryDir, "libantiapi.so");
-        if (nativeLib.exists() && nativeLib.canExecute()) {
-            return nativeLib;
-        }
-
-        // Fallback: extract from assets
-        File fallbackBin = new File(getFilesDir(), "antiapi");
-        if (!fallbackBin.exists() || fallbackBin.length() == 0) {
-            try (InputStream in = getAssets().open("antiapi");
-                 OutputStream out = new FileOutputStream(fallbackBin)) {
-                byte[] buf = new byte[8192];
-                int read;
-                while ((read = in.read(buf)) != -1) {
-                    out.write(buf, 0, read);
-                }
-                fallbackBin.setExecutable(true, false);
-            } catch (Exception e) {
-                Log.w(TAG, "Fallback asset extraction: " + e.getMessage());
-            }
-        }
-        fallbackBin.setExecutable(true, false);
-        return fallbackBin.exists() ? fallbackBin : nativeLib;
+        return new File(getApplicationInfo().nativeLibraryDir, "libantiapi.so");
     }
 
     private void ensureCredentials() {
@@ -262,7 +242,10 @@ public class AntiApiService extends Service {
     }
 
     private synchronized void appendLog(String line) {
-        logBuffer.append(line).append("\n");
+        if (logLines.size() >= MAX_LOG_LINES) {
+            logLines.remove(0);
+        }
+        logLines.add(line);
         for (LogListener l : listeners) {
             l.onLog(line);
         }
@@ -286,8 +269,10 @@ public class AntiApiService extends Service {
         if (publicTunnelUrl != null && !publicTunnelUrl.isEmpty()) {
             listener.onTunnelUrl(publicTunnelUrl);
         }
-        if (logBuffer.length() > 0) {
-            listener.onLog(logBuffer.toString());
+        if (!logLines.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            for (String l : logLines) sb.append(l).append("\n");
+            listener.onLog(sb.toString());
         }
     }
 

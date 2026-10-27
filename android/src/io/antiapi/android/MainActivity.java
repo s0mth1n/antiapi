@@ -117,6 +117,10 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
     public void onLog(final String line) {
         runOnUiThread(() -> {
             tvLogs.append(line + "\n");
+            if (tvLogs.getText().length() > 8000) {
+                String cur = tvLogs.getText().toString();
+                tvLogs.setText(cur.substring(cur.length() - 4000));
+            }
             scrollLogs.post(() -> scrollLogs.fullScroll(View.FOCUS_DOWN));
         });
     }

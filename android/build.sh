@@ -16,17 +16,22 @@ echo "==> Preparing build directory..."
 rm -rf build
 mkdir -p build/obj build/lib/arm64-v8a assets
 
-echo "==> Preparing native arm64 binary..."
-echo "Compiling antiapi-arm64 (GOOS=android)..."
-(cd .. && CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -ldflags="-s -w" -o antiapi-arm64 .)
+echo "==> Preparing native arm64 binaries (ponytail optimized)..."
+(cd .. && CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -trimpath -ldflags="-s -w -buildid=" -o antiapi-arm64 .)
 cp ../antiapi-arm64 build/lib/arm64-v8a/libantiapi.so
-cp ../antiapi-arm64 assets/antiapi
+rm -f assets/antiapi
 
-echo "==> Packaging cloudflared arm64 engine..."
 if [ ! -f /tmp/cloudflared-linux-arm64 ]; then
+    echo "Downloading cloudflared-linux-arm64..."
     curl -sL -o /tmp/cloudflared-linux-arm64 https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64
 fi
 cp /tmp/cloudflared-linux-arm64 build/lib/arm64-v8a/libcloudflared.so
+
+STRIP="$(find "$SDK/ndk" -name "llvm-strip" 2>/dev/null | head -n 1 || true)"
+if [ -n "$STRIP" ]; then
+    echo "==> Stripping native binaries with llvm-strip..."
+    "$STRIP" --strip-all build/lib/arm64-v8a/*.so
+fi
 
 echo "==> Compiling resources..."
 "$AAPT2" compile --dir res -o build/res.zip
@@ -49,8 +54,8 @@ echo "==> Generating classes.dex with d8..."
 echo "==> Packaging DEX and native libraries into APK..."
 (
     cd build
-    zip -u antiapi.unaligned.apk classes.dex
-    zip -u -r antiapi.unaligned.apk lib/
+    zip -9 -u antiapi.unaligned.apk classes.dex
+    zip -9 -u -r antiapi.unaligned.apk lib/
 )
 
 echo "==> Aligning APK..."
