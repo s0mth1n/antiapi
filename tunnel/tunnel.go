@@ -59,26 +59,19 @@ func Start(parentCtx context.Context, localPort int) (*Tunnel, error) {
 	ctx, cancel := context.WithCancel(parentCtx)
 	var cmd *exec.Cmd
 
+	token := os.Getenv("ANTIAPI_CLOUDFLARED_TOKEN")
+	var args []string
+	if token != "" {
+		args = []string{"tunnel", "--no-autoupdate", "run", "--token", token}
+	} else {
+		args = []string{"tunnel", "--url", fmt.Sprintf("http://127.0.0.1:%d", localPort), "--no-autoupdate"}
+	}
+
 	if cfPath := findCloudflared(); cfPath != "" {
-		cmd = exec.CommandContext(
-			ctx,
-			cfPath,
-			"tunnel",
-			"--url", fmt.Sprintf("http://127.0.0.1:%d", localPort),
-			"--no-autoupdate",
-		)
+		cmd = exec.CommandContext(ctx, cfPath, args...)
 	} else if nixPath, nErr := exec.LookPath("nix"); nErr == nil {
-		cmd = exec.CommandContext(
-			ctx,
-			nixPath,
-			"shell",
-			"nixpkgs#cloudflared",
-			"-c",
-			"cloudflared",
-			"tunnel",
-			"--url", fmt.Sprintf("http://127.0.0.1:%d", localPort),
-			"--no-autoupdate",
-		)
+		nixArgs := append([]string{"shell", "nixpkgs#cloudflared", "-c", "cloudflared"}, args...)
+		cmd = exec.CommandContext(ctx, nixPath, nixArgs...)
 	} else {
 		cancel()
 		return nil, errors.New("cloudflared executable not found in PATH or environment (use nix flake devShell or install cloudflared)")

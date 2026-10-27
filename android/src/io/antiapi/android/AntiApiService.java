@@ -117,6 +117,11 @@ public class AntiApiService extends Service {
                 env.put("ANTIAPI_CLOUDFLARED_PATH", cfBin.getAbsolutePath());
                 String curPath = System.getenv("PATH");
                 env.put("PATH", getApplicationInfo().nativeLibraryDir + (curPath != null ? ":" + curPath : ""));
+                String token = getSharedPreferences("antiapi_prefs", Context.MODE_PRIVATE)
+                        .getString("tunnel_token", "");
+                if (token != null && !token.trim().isEmpty()) {
+                    env.put("ANTIAPI_CLOUDFLARED_TOKEN", token.trim());
+                }
             }
 
             pb.redirectErrorStream(true);
