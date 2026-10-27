@@ -31,6 +31,11 @@ func TestExtractTunnelURL(t *testing.T) {
 			input:    "Visit https://developers.cloudflare.com/cloudflare-one/connections/connect-apps",
 			expected: "",
 		},
+		{
+			name:     "control plane api url",
+			input:    "2026-10-27T17:15:00Z INF Registered tunnel connection endpoint=https://api.trycloudflare.com",
+			expected: "",
+		},
 	}
 
 	for _, tc := range tests {

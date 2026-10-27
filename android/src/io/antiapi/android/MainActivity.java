@@ -17,13 +17,16 @@ import android.widget.TextView;
 
 public class MainActivity extends Activity implements AntiApiService.LogListener {
     private TextView tvStatus;
+    private TextView tvPublicUrl;
     private TextView tvLogs;
     private Button btnToggle;
+    private Button btnCopyPublic;
     private Button btnDashboard;
     private ScrollView scrollLogs;
 
     private AntiApiService apiService;
     private boolean isBound = false;
+    private String currentTunnelUrl = "";
 
     private final ServiceConnection connection = new ServiceConnection() {
         @Override
@@ -47,8 +50,10 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
         setContentView(R.layout.activity_main);
 
         tvStatus = findViewById(R.id.tv_status);
+        tvPublicUrl = findViewById(R.id.tv_public_url);
         tvLogs = findViewById(R.id.tv_logs);
         btnToggle = findViewById(R.id.btn_toggle);
+        btnCopyPublic = findViewById(R.id.btn_copy_public);
         btnDashboard = findViewById(R.id.btn_dashboard);
         scrollLogs = findViewById(R.id.scroll_logs);
 
@@ -65,6 +70,18 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
                 } else {
                     startService(startIntent);
                 }
+            }
+        });
+
+        btnCopyPublic.setOnClickListener(v -> {
+            if (!currentTunnelUrl.isEmpty()) {
+                android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                if (cm != null) {
+                    cm.setPrimaryClip(android.content.ClipData.newPlainText("AntiAPI Tunnel", currentTunnelUrl + "/v1"));
+                    android.widget.Toast.makeText(this, "Copied: " + currentTunnelUrl + "/v1", android.widget.Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                android.widget.Toast.makeText(this, "Tunnel initializing...", android.widget.Toast.LENGTH_SHORT).show();
             }
         });
 
@@ -118,6 +135,22 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
                 tvStatus.setTextColor(Color.parseColor("#FF5252"));
                 btnToggle.setText("Start Server");
                 btnToggle.setBackgroundColor(Color.parseColor("#2E7D32"));
+                if (tvPublicUrl != null) {
+                    tvPublicUrl.setText("Public Tunnel: Offline");
+                    tvPublicUrl.setTextColor(Color.parseColor("#757575"));
+                }
+                currentTunnelUrl = "";
+            }
+        });
+    }
+
+    @Override
+    public void onTunnelUrl(final String url) {
+        runOnUiThread(() -> {
+            currentTunnelUrl = url;
+            if (tvPublicUrl != null) {
+                tvPublicUrl.setText("Public Tunnel:\n" + url + "/v1");
+                tvPublicUrl.setTextColor(Color.parseColor("#00E676"));
             }
         });
     }

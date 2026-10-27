@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"sync"
 	"time"
@@ -16,7 +18,29 @@ var tunnelURLRegex = regexp.MustCompile(`https://[a-zA-Z0-9-]+\.trycloudflare\.c
 
 // ExtractTunnelURL searches raw log lines for a trycloudflare.com URL.
 func ExtractTunnelURL(line string) string {
-	return tunnelURLRegex.FindString(line)
+	u := tunnelURLRegex.FindString(line)
+	if u != "" && u != "https://api.trycloudflare.com" {
+		return u
+	}
+	return ""
+}
+
+func findCloudflared() string {
+	if envPath := os.Getenv("ANTIAPI_CLOUDFLARED_PATH"); envPath != "" {
+		if _, err := os.Stat(envPath); err == nil {
+			return envPath
+		}
+	}
+	if cfPath, err := exec.LookPath("cloudflared"); err == nil {
+		return cfPath
+	}
+	if exePath, err := os.Executable(); err == nil {
+		candidate := filepath.Join(filepath.Dir(exePath), "libcloudflared.so")
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	return ""
 }
 
 // Tunnel manages a cloudflared background subprocess exposing local port.
@@ -35,7 +59,7 @@ func Start(parentCtx context.Context, localPort int) (*Tunnel, error) {
 	ctx, cancel := context.WithCancel(parentCtx)
 	var cmd *exec.Cmd
 
-	if cfPath, err := exec.LookPath("cloudflared"); err == nil {
+	if cfPath := findCloudflared(); cfPath != "" {
 		cmd = exec.CommandContext(
 			ctx,
 			cfPath,
@@ -57,7 +81,7 @@ func Start(parentCtx context.Context, localPort int) (*Tunnel, error) {
 		)
 	} else {
 		cancel()
-		return nil, fmt.Errorf("cloudflared executable not found in PATH: %w (use nix flake devShell or install cloudflared)", err)
+		return nil, errors.New("cloudflared executable not found in PATH or environment (use nix flake devShell or install cloudflared)")
 	}
 
 	stderrPipe, err := cmd.StderrPipe()

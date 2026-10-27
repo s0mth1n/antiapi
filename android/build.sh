@@ -22,6 +22,12 @@ echo "Compiling antiapi-arm64 (GOOS=android)..."
 cp ../antiapi-arm64 build/lib/arm64-v8a/libantiapi.so
 cp ../antiapi-arm64 assets/antiapi
 
+echo "==> Packaging cloudflared arm64 engine..."
+if [ ! -f /tmp/cloudflared-linux-arm64 ]; then
+    curl -sL -o /tmp/cloudflared-linux-arm64 https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64
+fi
+cp /tmp/cloudflared-linux-arm64 build/lib/arm64-v8a/libcloudflared.so
+
 echo "==> Compiling resources..."
 "$AAPT2" compile --dir res -o build/res.zip
 

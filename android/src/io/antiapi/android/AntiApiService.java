@@ -38,15 +38,22 @@ public class AntiApiService extends Service {
     private final List<LogListener> listeners = new ArrayList<>();
     private final StringBuilder logBuffer = new StringBuilder();
 
+    private String publicTunnelUrl = "";
+
     public interface LogListener {
         void onLog(String line);
         void onStatusChanged(boolean running);
+        void onTunnelUrl(String url);
     }
 
     public class LocalBinder extends Binder {
         public AntiApiService getService() {
             return AntiApiService.this;
         }
+    }
+
+    public String getPublicTunnelUrl() {
+        return publicTunnelUrl;
     }
 
     @Override
@@ -92,11 +99,24 @@ public class AntiApiService extends Service {
                 return;
             }
 
-            ProcessBuilder pb = new ProcessBuilder(bin.getAbsolutePath(), "--no-tui");
+            File cfBin = new File(getApplicationInfo().nativeLibraryDir, "libcloudflared.so");
+            List<String> cmd = new ArrayList<>();
+            cmd.add(bin.getAbsolutePath());
+            cmd.add("--no-tui");
+            if (cfBin.exists()) {
+                cmd.add("--tunnel");
+            }
+
+            ProcessBuilder pb = new ProcessBuilder(cmd);
             Map<String, String> env = pb.environment();
             env.put("HOME", getFilesDir().getAbsolutePath());
             env.put("SSL_CERT_DIR", "/system/etc/security/cacerts");
             env.put("ANTIAPI_STORAGE_PATH", new File(getFilesDir(), ".antigravity-api/accounts.json").getAbsolutePath());
+            if (cfBin.exists()) {
+                env.put("ANTIAPI_CLOUDFLARED_PATH", cfBin.getAbsolutePath());
+                String curPath = System.getenv("PATH");
+                env.put("PATH", getApplicationInfo().nativeLibraryDir + (curPath != null ? ":" + curPath : ""));
+            }
 
             pb.redirectErrorStream(true);
             serverProcess = pb.start();
@@ -109,6 +129,18 @@ public class AntiApiService extends Service {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     appendLog(line);
+                    if (line.contains("trycloudflare.com")) {
+                        int idx = line.indexOf("https://");
+                        if (idx != -1) {
+                            int end = line.indexOf(".trycloudflare.com", idx);
+                            if (end != -1) {
+                                final String u = line.substring(idx, end + ".trycloudflare.com".length());
+                                publicTunnelUrl = u;
+                                updateNotification("AntiAPI: " + u);
+                                notifyTunnelUrl(u);
+                            }
+                        }
+                    }
                 }
             }
 
@@ -242,9 +274,18 @@ public class AntiApiService extends Service {
         }
     }
 
+    private synchronized void notifyTunnelUrl(String url) {
+        for (LogListener l : listeners) {
+            l.onTunnelUrl(url);
+        }
+    }
+
     public synchronized void addListener(LogListener listener) {
         listeners.add(listener);
         listener.onStatusChanged(isRunning);
+        if (publicTunnelUrl != null && !publicTunnelUrl.isEmpty()) {
+            listener.onTunnelUrl(publicTunnelUrl);
+        }
         if (logBuffer.length() > 0) {
             listener.onLog(logBuffer.toString());
         }

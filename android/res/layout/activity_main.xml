@@ -46,34 +46,56 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Endpoint: http://127.0.0.1:8964/v1"
+            android:text="Local Base URL: http://127.0.0.1:8964/v1"
             android:textColor="#B0BEC5"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/tv_public_url"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Public Tunnel: Starting..."
+            android:textColor="#80D8FF"
             android:textSize="13sp" />
     </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="20dp"
+        android:layout_marginTop="16dp"
         android:orientation="horizontal">
 
         <Button
             android:id="@+id/btn_toggle"
             android:layout_width="0dp"
-            android:layout_height="54dp"
+            android:layout_height="50dp"
             android:layout_weight="1"
             android:text="@string/btn_start"
             android:textColor="#FFFFFF"
             android:background="#2E7D32" />
 
         <Space
-            android:layout_width="12dp"
+            android:layout_width="10dp"
+            android:layout_height="wrap_content" />
+
+        <Button
+            android:id="@+id/btn_copy_public"
+            android:layout_width="0dp"
+            android:layout_height="50dp"
+            android:layout_weight="1"
+            android:text="Copy Public URL"
+            android:textColor="#FFFFFF"
+            android:background="#00838F" />
+
+        <Space
+            android:layout_width="10dp"
             android:layout_height="wrap_content" />
 
         <Button
             android:id="@+id/btn_dashboard"
             android:layout_width="0dp"
-            android:layout_height="54dp"
+            android:layout_height="50dp"
             android:layout_weight="1"
             android:text="@string/btn_dashboard"
             android:textColor="#FFFFFF"
