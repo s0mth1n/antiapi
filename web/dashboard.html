@@ -1048,6 +1048,58 @@
       font-size: 14px;
     }
 
+    .endpoint-mode-toggle {
+      display: inline-flex;
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 2px;
+      gap: 2px;
+    }
+
+    .mode-toggle-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: var(--radius-xs);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .mode-toggle-btn:hover {
+      color: var(--text-primary);
+    }
+
+    .mode-toggle-btn.active {
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .remote-callout-box {
+      margin: 1rem 1.25rem 0 1.25rem;
+      padding: 0.85rem 1rem;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      transition: all 0.2s ease;
+    }
+
+    .remote-callout-active {
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+
+    .remote-callout-inactive {
+      background: rgba(245, 158, 11, 0.08);
+      border: 1px solid rgba(245, 158, 11, 0.25);
+    }
+
     .code-workbench {
       position: relative;
       background: #07090d;
@@ -1178,6 +1230,10 @@
           <span class="pulse-dot"></span>
           <span id="gateway-status-text">Live</span>
         </div>
+        <div class="status-chip" id="tunnel-status-chip" title="Public Cloudflare Tunnel state (click to copy URL)" style="cursor: pointer;" onclick="copyPublicTunnelURL()">
+          <span class="pulse-dot" id="tunnel-pulse" style="background: #64748b;"></span>
+          <span id="tunnel-status-text">Tunnel: Inactive</span>
+        </div>
         <div class="status-chip" id="latency-chip" title="Ping latency to local gateway">
           <span style="color: var(--text-tertiary);">RTT</span>
           <span id="header-latency-val" style="color: var(--text-primary);">--ms</span>
@@ -1207,10 +1263,10 @@
         <div class="strip-value">8 Endpoints</div>
         <span class="strip-sub">Gemini 3.8 / Claude / GPT-OSS</span>
       </div>
-      <div class="strip-card accent-neutral">
-        <span class="strip-label">Local Proxy Port</span>
-        <div class="strip-value">127.0.0.1:8964</div>
-        <span class="strip-sub">OpenAI Compatible API</span>
+      <div class="strip-card accent-neutral" id="strip-endpoint-card">
+        <span class="strip-label" id="strip-endpoint-label">Gateway Access</span>
+        <div class="strip-value" id="strip-endpoint-val" style="font-size: 12.5px;">127.0.0.1:8964</div>
+        <span class="strip-sub" id="strip-endpoint-sub">Local only · Run --tunnel for remote</span>
       </div>
     </div>
   </section>
@@ -1363,27 +1419,48 @@
         <div class="panel-header">
           <div class="panel-title-group">
             <h1 class="panel-heading">Client Configuration Matrix</h1>
-            <p class="panel-caption">Drop-in configuration snippets for Hermes Agent, Cursor, Windsurf, and OpenAI SDKs</p>
+            <p class="panel-caption">Drop-in configuration snippets for remote laptops, Hermes Agent, Cursor, Windsurf, and OpenAI SDKs</p>
           </div>
-          <button class="btn btn-secondary" onclick="copyCurrentSnippet()">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            Copy Snippet
-          </button>
+          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <div class="endpoint-mode-toggle">
+              <button class="mode-toggle-btn active" id="btn-mode-local" onclick="setEndpointMode('local')">Local (127.0.0.1)</button>
+              <button class="mode-toggle-btn" id="btn-mode-public" onclick="setEndpointMode('public')">Public Tunnel</button>
+            </div>
+            <button class="btn btn-secondary" onclick="copyCurrentSnippet()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copy Snippet
+            </button>
+          </div>
+        </div>
+
+        <!-- Banner for Public Remote Sharing -->
+        <div id="remote-sharing-banner" class="remote-callout-box remote-callout-inactive">
+          <div>
+            <div style="font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 6px;" id="remote-banner-title">
+              <span class="pulse-dot" id="banner-pulse" style="background: #f59e0b;"></span>
+              <span>Remote Laptop Sharing: Local Only Mode</span>
+            </div>
+            <div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); margin-top: 3px;" id="remote-banner-url">
+              Run './antiapi --tunnel' to expose a public HTTPS endpoint for other laptops.
+            </div>
+          </div>
+          <button class="btn btn-secondary" id="btn-copy-remote-url" onclick="copyPublicBaseURL()" style="flex-shrink: 0; display: none;">Copy Public Base URL</button>
         </div>
 
         <div class="panel-body" style="padding: 0;">
           <div class="integration-layout">
             <div class="integration-sidebar">
-              <button class="snippet-nav-btn active" onclick="activateSnippet('hermes', this)">Hermes Agent</button>
+              <button class="snippet-nav-btn active" onclick="activateSnippet('remote', this)">Remote Laptops (Public)</button>
               <button class="snippet-nav-btn" onclick="activateSnippet('cursor', this)">Cursor / Windsurf</button>
+              <button class="snippet-nav-btn" onclick="activateSnippet('hermes', this)">Hermes Agent</button>
               <button class="snippet-nav-btn" onclick="activateSnippet('python', this)">Python OpenAI SDK</button>
               <button class="snippet-nav-btn" onclick="activateSnippet('curl', this)">cURL / CLI</button>
             </div>
 
             <div class="code-workbench">
               <div class="code-toolbar">
-                <span id="snippet-filename">~/.hermes/config.yaml</span>
-                <span id="snippet-lang-tag">YAML</span>
+                <span id="snippet-filename">Remote Laptop Setup Guide</span>
+                <span id="snippet-lang-tag">SETUP</span>
               </div>
               <pre class="code-block-content" id="active-snippet-text"></pre>
             </div>
@@ -1562,6 +1639,51 @@
         const firstEmail = (data.accounts && data.accounts.length > 0) ? data.accounts[0] : (data.selected_account || '--');
         document.getElementById('strip-primary-email').innerText = firstEmail;
         document.getElementById('flow-primary-node').innerText = `Slot 1 (${firstEmail})`;
+
+        // Update Public Tunnel status and indicators
+        const prevURL = serverPublicURL;
+        serverPublicURL = data.public_url || '';
+        const tunnelPulse = document.getElementById('tunnel-pulse');
+        const tunnelText = document.getElementById('tunnel-status-text');
+        const stripEndpointVal = document.getElementById('strip-endpoint-val');
+        const stripEndpointSub = document.getElementById('strip-endpoint-sub');
+        const remoteBanner = document.getElementById('remote-sharing-banner');
+        const remoteBannerTitle = document.getElementById('remote-banner-title');
+        const remoteBannerUrl = document.getElementById('remote-banner-url');
+        const btnCopyRemote = document.getElementById('btn-copy-remote-url');
+        const bannerPulse = document.getElementById('banner-pulse');
+
+        if (serverPublicURL) {
+          if (tunnelPulse) tunnelPulse.style.background = '#10b981';
+          if (tunnelText) tunnelText.innerText = 'Tunnel: Active';
+          if (stripEndpointVal) stripEndpointVal.innerText = serverPublicURL.replace(/^https?:\/\//, '');
+          if (stripEndpointSub) stripEndpointSub.innerHTML = '<span style="color: var(--success); font-weight: 500;">● Public HTTPS API Active</span>';
+
+          if (remoteBanner) {
+            remoteBanner.className = 'remote-callout-box remote-callout-active';
+            if (bannerPulse) bannerPulse.style.background = '#10b981';
+            if (remoteBannerTitle) remoteBannerTitle.innerHTML = '<span class="pulse-dot" style="background: #10b981;"></span><span style="color: #34d399;">Public Cloudflare Tunnel Active (Remote Laptop Access Ready)</span>';
+            if (remoteBannerUrl) remoteBannerUrl.innerHTML = `<strong>Base URL:</strong> ${serverPublicURL}/v1 &nbsp;·&nbsp; <strong>Key:</strong> antiapi`;
+            if (btnCopyRemote) btnCopyRemote.style.display = 'inline-flex';
+          }
+        } else {
+          if (tunnelPulse) tunnelPulse.style.background = '#64748b';
+          if (tunnelText) tunnelText.innerText = 'Tunnel: Inactive';
+          if (stripEndpointVal) stripEndpointVal.innerText = '127.0.0.1:8964';
+          if (stripEndpointSub) stripEndpointSub.innerText = 'Local only · Run --tunnel for remote';
+
+          if (remoteBanner) {
+            remoteBanner.className = 'remote-callout-box remote-callout-inactive';
+            if (bannerPulse) bannerPulse.style.background = '#f59e0b';
+            if (remoteBannerTitle) remoteBannerTitle.innerHTML = '<span class="pulse-dot" style="background: #f59e0b;"></span><span>Remote Sharing: Local Only Mode</span>';
+            if (remoteBannerUrl) remoteBannerUrl.innerText = "Run './antiapi --tunnel' on the host to expose a public HTTPS endpoint for other laptops.";
+            if (btnCopyRemote) btnCopyRemote.style.display = 'none';
+          }
+        }
+
+        if (prevURL !== serverPublicURL) {
+          updateSnippetDisplay();
+        }
       } catch (err) {
         console.error('Status fetch error:', err);
         document.getElementById('gateway-status-text').innerText = 'Sync Error';
@@ -1852,35 +1974,95 @@
     }
 
     // 4. Client Integration Matrix
-    const codeSnippets = {
-      hermes: {
-        filename: '~/.hermes/config.yaml',
-        lang: 'YAML',
-        code: `# ~/.hermes/config.yaml
-model:
-  provider: anti-api
-  default: gemini-3.7-flash-high
-  base_url: http://127.0.0.1:8964/v1
-  key_env: HERMES_CUSTOM_TOKENIN_API_KEY
+    let serverPublicURL = '';
+    let currentEndpointMode = 'local'; // 'local' or 'public'
+    let activeSnippetKey = 'remote';
 
-providers:
-  anti-api:
-    name: Anti-API
-    base_url: http://127.0.0.1:8964/v1
-    model: gemini-3.8-flash-high
-    discover_models: true
-    models:
-      gemini-3.8-flash-high: {}
-      gemini-3.7-flash-high: {}
-      claude-sonnet-4-6: {}
-      gemini-3.1-pro-high: {}`
-      },
-      cursor: {
-        filename: 'Cursor / Windsurf Custom OpenAI Settings',
-        lang: 'JSON / Settings',
-        code: `// Configure in Cursor Settings > Models > OpenAI API
+    function setEndpointMode(mode) {
+      currentEndpointMode = mode;
+      const btnLocal = document.getElementById('btn-mode-local');
+      const btnPublic = document.getElementById('btn-mode-public');
+      if (btnLocal) btnLocal.classList.toggle('active', mode === 'local');
+      if (btnPublic) btnPublic.classList.toggle('active', mode === 'public');
+      updateSnippetDisplay();
+      showToast(`Switched snippets to ${mode === 'public' ? 'Public Tunnel' : 'Local (127.0.0.1)'}`);
+    }
+
+    function getActiveBaseURL() {
+      if (currentEndpointMode === 'public') {
+        if (serverPublicURL) return serverPublicURL;
+        if (window.location.protocol.startsWith('http') && !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')) {
+          return window.location.origin;
+        }
+        return 'https://<assigned-tunnel>.trycloudflare.com';
+      }
+      return 'http://127.0.0.1:8964';
+    }
+
+    function getCodeSnippets() {
+      const baseUrl = getActiveBaseURL();
+      const publicBaseUrl = serverPublicURL || (window.location.protocol.startsWith('http') && !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1') ? window.location.origin : 'https://<assigned-tunnel>.trycloudflare.com');
+
+      return {
+        remote: {
+          filename: 'Remote Laptops (Other Networks) Setup Guide',
+          lang: 'Markdown / Setup',
+          code: `# ========================================================
+# HOW TO SETUP & USE ANTIAPI ON OTHER LAPTOPS / NETWORKS
+# ========================================================
+
+1. HOST MACHINE (Your laptop running AntiAPI):
+   Start AntiAPI with the Cloudflare tunnel enabled:
+   $ /home/lev/pro/antiapi/antiapi --tunnel
+   (or: nix run .#tunnel)
+
+   Public Base URL:
+   ${publicBaseUrl}/v1
+
+2. OTHER LAPTOP CONFIGURATION (Zero Client Install):
+   The other person can be anywhere on the internet (home, office, cafe).
+   No VPN, Tailscale, or client software is required on their laptop.
+
+   Base URL : ${publicBaseUrl}/v1
+   API Key  : antiapi (or any placeholder string)
+
+3. CURSOR / WINDSURF SETUP (On their laptop):
+   • Open Settings > Models
+   • Under "OpenAI API Key", enter: antiapi
+   • Toggle "Override OpenAI Base URL" and enter:
+     ${publicBaseUrl}/v1
+   • Add models: gemini-3.8-flash-high, gemini-3.7-flash-high, claude-sonnet-4-6
+
+4. VS CODE (CONTINUE / CLINE EXTENSIONS):
+   Add to config.json:
+   {
+     "models": [
+       {
+         "title": "AntiAPI Gemini 3.8",
+         "provider": "openai",
+         "model": "gemini-3.8-flash-high",
+         "apiBase": "${publicBaseUrl}/v1",
+         "apiKey": "antiapi"
+       }
+     ]
+   }
+
+5. VERIFY CONNECTION (From their terminal):
+   curl -X POST "${publicBaseUrl}/v1/chat/completions" \\
+     -H "Content-Type: application/json" \\
+     -H "Authorization: Bearer antiapi" \\
+     -d '{
+       "model": "gemini-3.8-flash-high",
+       "messages": [{"role": "user", "content": "ping"}],
+       "stream": false
+     }'`
+        },
+        cursor: {
+          filename: 'Cursor / Windsurf Custom OpenAI Settings',
+          lang: 'JSON / Settings',
+          code: `// Configure in Cursor Settings > Models > OpenAI API
 {
-  "openai_base_url": "http://127.0.0.1:8964/v1",
+  "openai_base_url": "${baseUrl}/v1",
   "openai_api_key": "antiapi",
   "models": [
     "gemini-3.8-flash-high",
@@ -1891,15 +2073,37 @@ providers:
     "gemini-3.1-pro-high"
   ]
 }`
-      },
-      python: {
-        filename: 'antiapi_client.py',
-        lang: 'Python',
-        code: `from openai import OpenAI
+        },
+        hermes: {
+          filename: '~/.hermes/config.yaml',
+          lang: 'YAML',
+          code: `# ~/.hermes/config.yaml
+model:
+  provider: anti-api
+  default: gemini-3.7-flash-high
+  base_url: ${baseUrl}/v1
+  key_env: HERMES_CUSTOM_TOKENIN_API_KEY
+
+providers:
+  anti-api:
+    name: Anti-API
+    base_url: ${baseUrl}/v1
+    model: gemini-3.8-flash-high
+    discover_models: true
+    models:
+      gemini-3.8-flash-high: {}
+      gemini-3.7-flash-high: {}
+      claude-sonnet-4-6: {}
+      gemini-3.1-pro-high: {}`
+        },
+        python: {
+          filename: 'antiapi_client.py',
+          lang: 'Python',
+          code: `from openai import OpenAI
 
 # Initialize standard OpenAI client pointing to AntiAPI Gateway
 client = OpenAI(
-    base_url="http://127.0.0.1:8964/v1",
+    base_url="${baseUrl}/v1",
     api_key="antiapi"
 )
 
@@ -1914,11 +2118,11 @@ for chunk in response:
     if chunk.choices[0].delta.content:
         print(chunk.choices[0].delta.content, end="", flush=True)
 print()`
-      },
-      curl: {
-        filename: 'terminal.sh',
-        lang: 'Bash / cURL',
-        code: `curl http://127.0.0.1:8964/v1/chat/completions \\
+        },
+        curl: {
+          filename: 'terminal.sh',
+          lang: 'Bash / cURL',
+          code: `curl ${baseUrl}/v1/chat/completions \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer antiapi" \\
   -d '{
@@ -1928,17 +2132,25 @@ print()`
     ],
     "stream": false
   }'`
-      }
-    };
-
-    let activeSnippetKey = 'hermes';
+        }
+      };
+    }
 
     function activateSnippet(key, btn) {
       activeSnippetKey = key;
       document.querySelectorAll('.snippet-nav-btn').forEach(b => b.classList.remove('active'));
-      if (btn) btn.classList.add('active');
+      if (btn) {
+        btn.classList.add('active');
+      } else {
+        const matching = Array.from(document.querySelectorAll('.snippet-nav-btn')).find(b => b.getAttribute('onclick')?.includes(`'${key}'`));
+        if (matching) matching.classList.add('active');
+      }
+      updateSnippetDisplay();
+    }
 
-      const data = codeSnippets[key];
+    function updateSnippetDisplay() {
+      const snippets = getCodeSnippets();
+      const data = snippets[activeSnippetKey] || snippets['remote'];
       if (data) {
         document.getElementById('snippet-filename').innerText = data.filename;
         document.getElementById('snippet-lang-tag').innerText = data.lang;
@@ -1947,10 +2159,30 @@ print()`
     }
 
     function copyCurrentSnippet() {
-      const data = codeSnippets[activeSnippetKey];
+      const snippets = getCodeSnippets();
+      const data = snippets[activeSnippetKey];
       if (data) {
         copyText(data.code);
         showToast('Snippet copied to clipboard');
+      }
+    }
+
+    function copyPublicTunnelURL() {
+      if (serverPublicURL) {
+        copyText(`${serverPublicURL}/v1`);
+        showToast('Public API Base URL copied');
+      } else {
+        showToast('Tunnel inactive. Run ./antiapi --tunnel to start');
+      }
+    }
+
+    function copyPublicBaseURL() {
+      if (serverPublicURL) {
+        copyText(`${serverPublicURL}/v1`);
+        showToast('Public Base URL copied to clipboard');
+      } else {
+        copyText('http://127.0.0.1:8964/v1');
+        showToast('Local Base URL copied to clipboard');
       }
     }
 
@@ -1967,7 +2199,7 @@ print()`
       renderModelsTable();
       loadStatus();
       loadAccounts();
-      activateSnippet('hermes', document.querySelector('.snippet-nav-btn'));
+      activateSnippet('remote', document.querySelector('.snippet-nav-btn'));
       setInterval(loadStatus, 8000);
     });
   </script>

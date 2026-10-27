@@ -114,6 +114,7 @@ func TestTUI_Lifecycle(t *testing.T) {
 	}
 
 	SetActivity("Testing activity update")
+	SetTunnelURL("https://sample-node-123.trycloudflare.com")
 	app.Render()
 	app.Stop()
 }

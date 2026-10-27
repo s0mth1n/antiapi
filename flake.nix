@@ -5,14 +5,21 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   };
 
-  outputs = { self, nixpkgs }:
+  outputs =
+    { self, nixpkgs }:
     let
-      supportedSystems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
+      supportedSystems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "x86_64-darwin"
+        "aarch64-darwin"
+      ];
       forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
       pkgsFor = system: import nixpkgs { inherit system; };
     in
     {
-      packages = forAllSystems (system:
+      packages = forAllSystems (
+        system:
         let
           pkgs = pkgsFor system;
         in
@@ -26,10 +33,38 @@
             env = {
               CGO_ENABLED = "0";
             };
+            nativeBuildInputs = [ pkgs.makeWrapper ];
+            postInstall = ''
+              wrapProgram $out/bin/antiapi \
+                --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.cloudflared ]}
+            '';
           };
-        });
+        }
+      );
 
-      devShells = forAllSystems (system:
+      apps = forAllSystems (
+        system:
+        let
+          pkgs = pkgsFor system;
+        in
+        {
+          default = {
+            type = "app";
+            program = "${self.packages.${system}.default}/bin/antiapi";
+          };
+          tunnel = {
+            type = "app";
+            program = "${
+              pkgs.writeShellScriptBin "antiapi-tunnel" ''
+                exec ${self.packages.${system}.default}/bin/antiapi --tunnel "$@"
+              ''
+            }/bin/antiapi-tunnel";
+          };
+        }
+      );
+
+      devShells = forAllSystems (
+        system:
         let
           pkgs = pkgsFor system;
         in
@@ -43,12 +78,14 @@
               git
               cacert
               python3
+              cloudflared
             ];
 
             shellHook = ''
               export CGO_ENABLED=0
             '';
           };
-        });
+        }
+      );
     };
 }

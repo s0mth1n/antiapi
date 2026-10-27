@@ -17,12 +17,14 @@ import (
 	"antiapi/models"
 	"antiapi/server"
 	"antiapi/tui"
+	"antiapi/tunnel"
 )
 
 func main() {
 	port := flag.Int("port", 8964, "Port to listen on")
 	host := flag.String("host", "0.0.0.0", "Host address to bind")
 	noTui := flag.Bool("no-tui", false, "Disable interactive TUI and use streaming logs")
+	enableTunnel := flag.Bool("tunnel", false, "Start a cloudflared public tunnel and expose the API over HTTPS")
 	flag.Parse()
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmsgprefix)
@@ -83,6 +85,29 @@ func main() {
 		}
 	}()
 
+	// Cloudflare Tunnel
+	var tun *tunnel.Tunnel
+	if *enableTunnel || os.Getenv("ANTIAPI_TUNNEL") == "1" || os.Getenv("ANTIAPI_TUNNEL") == "true" {
+		t, err := tunnel.Start(context.Background(), *port)
+		if err != nil {
+			log.Printf("[Tunnel] Warning: could not start cloudflared tunnel: %v", err)
+		} else {
+			tun = t
+			go func() {
+				url, err := tun.WaitURL(30 * time.Second)
+				if err != nil {
+					log.Printf("[Tunnel] Failed to resolve public URL: %v", err)
+					return
+				}
+				srv.SetPublicURL(url)
+				log.Printf("Public API Tunnel: %s/v1", url)
+				if useTUI {
+					tui.SetTunnelURL(url)
+				}
+			}()
+		}
+	}
+
 	// Graceful shutdown
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
@@ -98,6 +123,9 @@ func main() {
 	}()
 
 	<-stop
+	if tun != nil {
+		tun.Stop()
+	}
 	if useTUI && appTUI != nil {
 		appTUI.Stop()
 	}

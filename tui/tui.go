@@ -48,6 +48,7 @@ type TUI struct {
 
 	mu                sync.RWMutex
 	lastActivity      string
+	tunnelURL         string
 	lastRenderedLines int
 	isInitialized     bool
 	stopCh            chan struct{}
@@ -87,6 +88,19 @@ func SetActivity(msg string) {
 	}
 	t.mu.Lock()
 	t.lastActivity = msg
+	t.mu.Unlock()
+	t.Render()
+}
+
+func SetTunnelURL(url string) {
+	globalMu.RLock()
+	t := globalTUI
+	globalMu.RUnlock()
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	t.tunnelURL = url
 	t.mu.Unlock()
 	t.Render()
 }
@@ -145,6 +159,10 @@ func (t *TUI) Render() {
 		Bold+HiCyan, Reset, Bold+HiWhite, Reset, t.port), CardWidth))
 	lines = append(lines, formatRow(fmt.Sprintf("%s➜%s  %sModels:%s     http://localhost:%d/v1/models",
 		Bold+HiCyan, Reset, Bold+HiWhite, Reset, t.port), CardWidth))
+	if t.tunnelURL != "" {
+		lines = append(lines, formatRow(fmt.Sprintf("%s➜%s  %sPublic API:%s  %s/v1",
+			Bold+HiGreen, Reset, Bold+HiWhite, Reset, t.tunnelURL), CardWidth))
+	}
 
 	// 4. Empty row
 	lines = append(lines, formatRow("", CardWidth))

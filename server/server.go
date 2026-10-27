@@ -56,6 +56,20 @@ func applyAdaptiveJitter(ctx context.Context, payloadLen int) {
 type Server struct {
 	upstreamClient *upstream.Client
 	mux            *http.ServeMux
+	publicURL      string
+	publicURLMu    sync.RWMutex
+}
+
+func (s *Server) SetPublicURL(u string) {
+	s.publicURLMu.Lock()
+	defer s.publicURLMu.Unlock()
+	s.publicURL = u
+}
+
+func (s *Server) GetPublicURL() string {
+	s.publicURLMu.RLock()
+	defer s.publicURLMu.RUnlock()
+	return s.publicURL
 }
 
 func NewServer() *Server {
@@ -249,6 +263,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"total":            len(accs),
 		"selected_account": selectedEmail,
 		"quota_summaries":  quotaSummaries,
+		"public_url":       s.GetPublicURL(),
 		"quotas": map[string]float64{
 			"claude_gpt":   claudePct,
 			"gemini_pro":   geminiPct,
