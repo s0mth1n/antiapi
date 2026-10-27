@@ -21,11 +21,21 @@ echo "==> Preparing native arm64 binaries (ponytail optimized)..."
 cp ../antiapi-arm64 build/lib/arm64-v8a/libantiapi.so
 rm -f assets/antiapi
 
-if [ ! -f /tmp/cloudflared-linux-arm64 ]; then
-    echo "Downloading cloudflared-linux-arm64..."
-    curl -sL -o /tmp/cloudflared-linux-arm64 https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64
+CF_BIN="$HOME/.cache/antiapi/libcloudflared.so"
+if [ ! -f "$CF_BIN" ]; then
+    echo "==> Building Android-compatible cloudflared with DNS fallback..."
+    CF_SRC="/tmp/cf-src"
+    if [ ! -d "$CF_SRC" ]; then
+        git clone --depth 1 https://github.com/cloudflare/cloudflared "$CF_SRC"
+    fi
+    if ! grep -q "net.DefaultResolver" "$CF_SRC/cmd/cloudflared/main.go"; then
+        sed -i 's|"github.com/getsentry/sentry-go"|"github.com/getsentry/sentry-go"\n\t"net"\n\t"context"|' "$CF_SRC/cmd/cloudflared/main.go"
+        sed -i '/func main()/i func init() { if _, err := os.Stat("/etc/resolv.conf"); err != nil { net.DefaultResolver = \&net.Resolver{ PreferGo: true, Dial: func(ctx context.Context, network, address string) (net.Conn, error) { d := net.Dialer{Timeout: 3 * time.Second}; conn, err := d.DialContext(ctx, "udp", "1.1.1.1:53"); if err != nil { return d.DialContext(ctx, "udp", "8.8.8.8:53"); }; return conn, nil; } }; }; if os.Getenv("SSL_CERT_DIR") == "" { if _, err := os.Stat("/system/etc/security/cacerts"); err == nil { _ = os.Setenv("SSL_CERT_DIR", "/system/etc/security/cacerts"); }; }; }\n' "$CF_SRC/cmd/cloudflared/main.go"
+    fi
+    mkdir -p "$(dirname "$CF_BIN")"
+    (cd "$CF_SRC" && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w -buildid=" -o "$CF_BIN" ./cmd/cloudflared)
 fi
-cp /tmp/cloudflared-linux-arm64 build/lib/arm64-v8a/libcloudflared.so
+cp "$CF_BIN" build/lib/arm64-v8a/libcloudflared.so
 
 STRIP="$(find "$SDK/ndk" -name "llvm-strip" 2>/dev/null | head -n 1 || true)"
 if [ -n "$STRIP" ]; then

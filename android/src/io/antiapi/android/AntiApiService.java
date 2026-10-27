@@ -273,6 +273,7 @@ public class AntiApiService extends Service {
     }
 
     private synchronized void appendLog(String line) {
+        Log.i(TAG, line);
         if (logLines.size() >= MAX_LOG_LINES) {
             logLines.remove(0);
         }
