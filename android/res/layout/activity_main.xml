@@ -55,8 +55,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
-            android:text="Public Tunnel: Starting..."
-            android:textColor="#80D8FF"
+            android:text="Public Tunnel: Connecting..."
+            android:textColor="#FFB300"
             android:textSize="13sp" />
     </LinearLayout>
 

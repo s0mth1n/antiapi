@@ -94,6 +94,15 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 101);
         }
+
+        // Auto-start server and public tunnel by default on launch
+        Intent startIntent = new Intent(this, AntiApiService.class);
+        startIntent.setAction(AntiApiService.ACTION_START);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(startIntent);
+        } else {
+            startService(startIntent);
+        }
     }
 
     @Override
@@ -134,6 +143,10 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
                 btnToggle.setText("Stop Server");
                 btnToggle.setBackgroundColor(Color.parseColor("#C62828"));
                 btnDashboard.setEnabled(true);
+                if (currentTunnelUrl.isEmpty() && tvPublicUrl != null) {
+                    tvPublicUrl.setText("Public Tunnel: Connecting...");
+                    tvPublicUrl.setTextColor(Color.parseColor("#FFB300"));
+                }
             } else {
                 tvStatus.setText("Status: Stopped");
                 tvStatus.setTextColor(Color.parseColor("#FF5252"));

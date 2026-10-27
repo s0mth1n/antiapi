@@ -126,19 +126,50 @@ public class AntiApiService extends Service {
             updateNotification("AntiAPI running on :8964");
             appendLog("[System] AntiAPI process launched (PID: " + bin.getName() + ")");
 
+            Thread pollThread = new Thread(() -> {
+                while (isRunning && (publicTunnelUrl == null || publicTunnelUrl.isEmpty())) {
+                    try {
+                        Thread.sleep(2000);
+                        java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL("http://127.0.0.1:8964/quota").openConnection();
+                        conn.setConnectTimeout(1000);
+                        conn.setReadTimeout(1000);
+                        if (conn.getResponseCode() == 200) {
+                            try (BufferedReader r = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+                                String body = r.readLine();
+                                if (body != null && body.contains("\"public_url\":\"https://") && !body.contains("api.trycloudflare.com")) {
+                                    int s = body.indexOf("\"public_url\":\"") + 14;
+                                    int e = body.indexOf("\"", s);
+                                    if (e > s) {
+                                        String resolved = body.substring(s, e);
+                                        publicTunnelUrl = resolved;
+                                        updateNotification("AntiAPI: " + resolved);
+                                        notifyTunnelUrl(resolved);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
+            });
+            pollThread.setDaemon(true);
+            pollThread.start();
+
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(serverProcess.getInputStream()))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     appendLog(line);
-                    if (line.contains("trycloudflare.com")) {
+                    if (line.contains("trycloudflare.com") && !line.contains("api.trycloudflare.com")) {
                         int idx = line.indexOf("https://");
                         if (idx != -1) {
                             int end = line.indexOf(".trycloudflare.com", idx);
                             if (end != -1) {
                                 final String u = line.substring(idx, end + ".trycloudflare.com".length());
-                                publicTunnelUrl = u;
-                                updateNotification("AntiAPI: " + u);
-                                notifyTunnelUrl(u);
+                                if (!u.contains("api.trycloudflare.com")) {
+                                    publicTunnelUrl = u;
+                                    updateNotification("AntiAPI: " + u);
+                                    notifyTunnelUrl(u);
+                                }
                             }
                         }
                     }
