@@ -44,15 +44,12 @@ func NewClient() *Client {
 	}
 }
 
-// StreamGenerate sends request to Google backend with automatic multi-account failover
 func getCapacityFallbackModel(model string) string {
-	switch strings.ToLower(strings.TrimSpace(model)) {
-	case "gemini-3.8-flash-high", "gemini-3.8-flash", "gemini-3.8", "gemini-3.8-high":
-		return "gemini-3.7-flash-high"
-	case "gemini-3.8-flash-medium", "gemini-3.8-medium":
-		return "gemini-3.7-flash-medium"
-	case "gemini-3.8-flash-low", "gemini-3.8-low":
-		return "gemini-3.7-flash-low"
+	switch model {
+	case "gemini-3.8-flash-high":
+		return "gemini-3.8-flash-medium"
+	case "gemini-3.8-flash-medium":
+		return "gemini-3.8-flash-low"
 	default:
 		return ""
 	}

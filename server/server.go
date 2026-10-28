@@ -90,6 +90,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/accounts/add", s.cors(s.handleAddAccount))
 	s.mux.HandleFunc("/api/accounts/remove", s.cors(s.handleRemoveAccount))
 	s.mux.HandleFunc("/api/accounts/reorder", s.cors(s.handleReorderAccounts))
+	s.mux.HandleFunc("/api/accounts/clear_cooldown", s.cors(s.handleClearCooldown))
 	s.mux.HandleFunc("/api/logs", s.cors(s.handleLogs))
 	s.mux.HandleFunc("/oauth/login", s.cors(s.handleOAuthLogin))
 	s.mux.HandleFunc("/quota", s.cors(s.handleStatus))
@@ -344,6 +345,12 @@ func (s *Server) handleRemoveAccount(w http.ResponseWriter, r *http.Request) {
 	success := auth.GetPool().RemoveAccount(body.Email)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"success": success})
+}
+
+func (s *Server) handleClearCooldown(w http.ResponseWriter, r *http.Request) {
+	auth.GetPool().ClearAllRateLimits()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "message": "cooldowns cleared"})
 }
 
 func (s *Server) handleOAuthLogin(w http.ResponseWriter, r *http.Request) {

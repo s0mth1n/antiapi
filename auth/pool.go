@@ -114,6 +114,7 @@ func (a *Account) ClearRateLimit() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.RateLimitedUntil = time.Time{}
+	a.QuarantinedUntil = time.Time{}
 }
 
 func (a *Account) RecordSuccess() {

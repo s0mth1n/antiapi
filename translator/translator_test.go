@@ -109,7 +109,7 @@ func TestClaudeToolsAndMessages(t *testing.T) {
 	}
 
 	gReq, model := ConvertClaudeToGoogle(req)
-	if model != "claude-sonnet-4-6" && model != "claude-3-5-sonnet" {
+	if model != "gemini-3.8-flash-high" {
 		t.Errorf("unexpected resolved model: %s", model)
 	}
 

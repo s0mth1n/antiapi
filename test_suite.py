@@ -34,9 +34,9 @@ def test_models_list():
     with urllib.request.urlopen(req) as resp:
         data = json.loads(resp.read().decode())
         models = [m["id"] for m in data.get("data", [])]
-        expected = ["claude-sonnet-4-6", "gemini-3.7-flash-high", "gemini-3.8-flash-high", "gpt-oss-120b-medium"]
+        expected = ["gemini-3.8-flash", "gemini-3.8-flash-high"]
         all_found = all(any(e in m for m in models) for e in expected)
-        log_test("GET /v1/models", all_found, f"Found {len(models)} models: {models[:4]}...")
+        log_test("GET /v1/models", all_found, f"Found {len(models)} models: {models}")
 
 def test_streaming(model_name):
     payload = {
@@ -152,10 +152,10 @@ def test_unknown_model_fallback():
 
 def test_concurrency():
     models_to_test = [
-        "gemini-3.7-flash-high",
+        "gemini-3.8-flash",
         "gemini-3.8-flash-high",
-        "claude-sonnet-4-6",
-        "gemini-3.6-flash-medium"
+        "gemini-3.8-flash-medium",
+        "gemini-3.8-flash-low"
     ]
     def query(m):
         payload = {"model": m, "messages": [{"role": "user", "content": f"Hi from {m}"}], "stream": False}
@@ -176,16 +176,12 @@ if __name__ == "__main__":
     test_health_and_status()
     test_models_list()
     
-    print("\n--- Testing All Native & Tier Models ---")
+    print("\n--- Testing Gemini 3.8 Flash Variants ---")
     core_models = [
-        "claude-sonnet-4-6",
-        "claude-opus-4-6-thinking",
+        "gemini-3.8-flash",
         "gemini-3.8-flash-high",
-        "gemini-3.7-flash-high",
-        "gemini-3.7-flash-medium",
-        "gemini-3.6-flash-medium",
-        "gemini-3.1-pro-high",
-        "gpt-oss-120b-medium"
+        "gemini-3.8-flash-medium",
+        "gemini-3.8-flash-low"
     ]
     for m in core_models:
         test_streaming(m)

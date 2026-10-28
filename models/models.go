@@ -55,7 +55,7 @@ func GetRegistry() *Registry {
 	once.Do(func() {
 		globalRegistry = &Registry{
 			models:       make(map[string]ModelInfo),
-			defaultModel: "gemini-3.7-flash-high",
+			defaultModel: "gemini-3.8-flash-high",
 		}
 		globalRegistry.initDefaults()
 	})
@@ -64,21 +64,10 @@ func GetRegistry() *Registry {
 
 // CuratedSupportedModels defines the clean, official models exposed via /v1/models
 var CuratedSupportedModels = []ModelInfo{
-	{ID: "claude-sonnet-4-6", Name: "Claude Sonnet 4.6", Tier: "Claude", ContextWindow: 1048576, MaxOutputTokens: 131072, Pricing: &ModelPricing{Prompt: "0.000003", Completion: "0.000015"}},
-	{ID: "claude-opus-4-6", Name: "Claude Opus 4.6", Tier: "Claude", ContextWindow: 1048576, MaxOutputTokens: 131072, Pricing: &ModelPricing{Prompt: "0.000015", Completion: "0.000075"}},
-	{ID: "claude-opus-4-6-thinking", Name: "Claude Opus 4.6 (Thinking)", Tier: "Claude", ContextWindow: 1048576, MaxOutputTokens: 131072, Pricing: &ModelPricing{Prompt: "0.000015", Completion: "0.000075"}},
 	{ID: "gemini-3.8-flash", Name: "Gemini 3.8 Flash", Tier: "Gemini Flash", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.00000075", Completion: "0.00000375"}},
 	{ID: "gemini-3.8-flash-high", Name: "Gemini 3.8 Flash (High)", Tier: "Gemini Flash", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.00000075", Completion: "0.00000375"}},
 	{ID: "gemini-3.8-flash-medium", Name: "Gemini 3.8 Flash (Medium)", Tier: "Gemini Flash", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.0000005", Completion: "0.0000025"}},
 	{ID: "gemini-3.8-flash-low", Name: "Gemini 3.8 Flash (Low)", Tier: "Gemini Flash", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.00000025", Completion: "0.00000125"}},
-	{ID: "gemini-3.7-flash", Name: "Gemini 3.7 Flash", Tier: "Gemini Flash", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.00000075", Completion: "0.00000375"}},
-	{ID: "gemini-3.7-flash-high", Name: "Gemini 3.7 Flash (High)", Tier: "Gemini Flash", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.00000075", Completion: "0.00000375"}},
-	{ID: "gemini-3.7-flash-medium", Name: "Gemini 3.7 Flash (Medium)", Tier: "Gemini Flash", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.0000005", Completion: "0.0000025"}},
-	{ID: "gemini-3.6-flash", Name: "Gemini 3.6 Flash", Tier: "Gemini Flash", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.0000005", Completion: "0.0000025"}},
-	{ID: "gemini-3.6-flash-medium", Name: "Gemini 3.6 Flash (Medium)", Tier: "Gemini Flash", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.0000005", Completion: "0.0000025"}},
-	{ID: "gemini-3.1-pro", Name: "Gemini 3.1 Pro", Tier: "Gemini Pro", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.00000125", Completion: "0.000005"}},
-	{ID: "gemini-3.1-pro-high", Name: "Gemini 3.1 Pro (High)", Tier: "Gemini Pro", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.00000125", Completion: "0.000005"}},
-	{ID: "gpt-oss-120b-medium", Name: "GPT-OSS 120B (Medium)", Tier: "GPT", ContextWindow: 131072, MaxOutputTokens: 8192, Pricing: &ModelPricing{Prompt: "0.0000005", Completion: "0.0000025"}},
 }
 
 func (r *Registry) initDefaults() {
@@ -155,11 +144,11 @@ func (r *Registry) FetchLiveModels() error {
 			info.QuotaInfo.ResetTime = m.QuotaInfo.ResetTime
 			r.models[id] = info
 		}
-		if id == "gemini-pro-agent" {
-			if proInfo, hasPro := r.models["gemini-3.1-pro-high"]; hasPro && m.QuotaInfo != nil {
-				proInfo.QuotaInfo.RemainingFraction = m.QuotaInfo.RemainingFraction
-				proInfo.QuotaInfo.ResetTime = m.QuotaInfo.ResetTime
-				r.models["gemini-3.1-pro-high"] = proInfo
+		if id == "gemini-3.8-flash-high" && m.QuotaInfo != nil {
+			if flashInfo, ok := r.models["gemini-3.8-flash"]; ok {
+				flashInfo.QuotaInfo.RemainingFraction = m.QuotaInfo.RemainingFraction
+				flashInfo.QuotaInfo.ResetTime = m.QuotaInfo.ResetTime
+				r.models["gemini-3.8-flash"] = flashInfo
 			}
 		}
 	}
@@ -178,9 +167,7 @@ func (r *Registry) ResolveModel(userModel string) string {
 		return r.defaultModel
 	}
 
-	// 1. Exact alias mappings FIRST
 	aliases := map[string]string{
-		// Gemini 3.8 / 3.7
 		"gemini-3.8":              "gemini-3.8-flash-high",
 		"gemini-3.8-flash":        "gemini-3.8-flash-high",
 		"gemini-3.8-flash-high":   "gemini-3.8-flash-high",
@@ -189,83 +176,17 @@ func (r *Registry) ResolveModel(userModel string) string {
 		"gemini-3.8-medium":       "gemini-3.8-flash-medium",
 		"gemini-3.8-flash-low":    "gemini-3.8-flash-low",
 		"gemini-3.8-low":          "gemini-3.8-flash-low",
-		"gemini-3.7":              "gemini-3.7-flash-medium",
-		"gemini-3.7-flash":        "gemini-3.7-flash-medium",
-		"gemini-3.7-flash-medium": "gemini-3.7-flash-medium",
-		"gemini-3.7-flash-high":   "gemini-3.7-flash-high",
-		"gemini-3.7-high":         "gemini-3.7-flash-high",
-		"gemini-3.7-flash-low":    "gemini-3.7-flash-low",
-		"gemini-3.7-low":          "gemini-3.7-flash-low",
-		"gemini-3.7-ultra":        "gemini-3.7-flash-high",
-		"gemini-ultra":            "gemini-3.7-flash-high",
-
-		// Gemini 3.6
-		"gemini-3.6":              "gemini-3.6-flash-medium",
-		"gemini-3.6-flash":        "gemini-3.6-flash-medium",
-		"gemini-3.6-flash-high":   "gemini-3.6-flash-high",
-		"gemini-3.6-flash-medium": "gemini-3.6-flash-medium",
-		"gemini-3.6-flash-low":    "gemini-3.6-flash-low",
-
-		// Gemini Pro - Maps to native Google "gemini-pro-agent"
-		"gemini-pro":          "gemini-pro-agent",
-		"gemini-3-pro-high":   "gemini-pro-agent",
-		"gemini-3.1-pro":      "gemini-pro-agent",
-		"gemini-3.1-pro-high": "gemini-pro-agent",
-		"gemini-3.1-pro-low":  "gemini-3.1-pro-low",
-
-		// Claude
-		"claude-sonnet-4-6":          "claude-sonnet-4-6",
-		"claude-sonnet-4.6":          "claude-sonnet-4-6",
-		"claude-sonnet-4.6-thinking": "claude-sonnet-4-6",
-		"claude-3-7-sonnet":          "claude-sonnet-4-6",
-		"claude-3.7-sonnet":          "claude-sonnet-4-6",
-		"claude-3-7-sonnet-20250219": "claude-sonnet-4-6",
-		"claude-3-5-sonnet":          "claude-sonnet-4-6",
-		"claude-3.5-sonnet":          "claude-sonnet-4-6",
-		"claude-3-5-sonnet-20241022": "claude-sonnet-4-6",
-		"claude-3-5-sonnet-latest":   "claude-sonnet-4-6",
-		"claude-sonnet":              "claude-sonnet-4-6",
-		"claude-opus-4-6":            "claude-opus-4-6-thinking",
-		"claude-opus-4.6":            "claude-opus-4-6-thinking",
-		"claude-opus-4-6-thinking":   "claude-opus-4-6-thinking",
-		"claude-3-opus":              "claude-opus-4-6-thinking",
-		"claude-opus":                "claude-opus-4-6-thinking",
-
-		// GPT & OSS
-		"gpt-oss":             "gpt-oss-120b-medium",
-		"gpt-oss-120b":        "gpt-oss-120b-medium",
-		"gpt-oss-120b-medium": "gpt-oss-120b-medium",
-		"gpt-4o":              "claude-sonnet-4-6",
-		"gpt-4":               "claude-sonnet-4-6",
 	}
 
 	if target, ok := aliases[cleaned]; ok {
 		return target
 	}
 
-	// 2. Direct match
 	if _, ok := r.models[cleaned]; ok {
 		return cleaned
 	}
 
-	// 3. Fuzzy match
-	if strings.Contains(cleaned, "opus") {
-		return "claude-opus-4-6-thinking"
-	}
-	if strings.Contains(cleaned, "claude") || strings.Contains(cleaned, "sonnet") {
-		return "claude-sonnet-4-6"
-	}
-	if strings.Contains(cleaned, "gpt-oss") {
-		return "gpt-oss-120b-medium"
-	}
-	if strings.Contains(cleaned, "pro") {
-		return "gemini-pro-agent"
-	}
-	if strings.Contains(cleaned, "flash") || strings.Contains(cleaned, "gemini") {
-		return "gemini-3.7-flash-high"
-	}
-
-	log.Printf("[Models] Unknown model requested '%s'; falling back gracefully to '%s'", userModel, r.defaultModel)
+	log.Printf("[Models] Model requested '%s' routed to default '%s'", userModel, r.defaultModel)
 	return r.defaultModel
 }
 

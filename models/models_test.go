@@ -18,15 +18,11 @@ func TestModelResolution(t *testing.T) {
 		{"gemini-3.8-low", "gemini-3.8-flash-low"},
 		{"gemini-3.8-high", "gemini-3.8-flash-high"},
 		{"gemini-3.8", "gemini-3.8-flash-high"},
-		{"gemini-3.7-flash-high", "gemini-3.7-flash-high"},
-		{"gemini-3.7-flash-medium", "gemini-3.7-flash-medium"},
-		{"gemini-3.7-flash-low", "gemini-3.7-flash-low"},
-		{"gemini-3.7-ultra", "gemini-3.7-flash-high"},
-		{"gemini-ultra", "gemini-3.7-flash-high"},
-		{"claude-3-7-sonnet", "claude-sonnet-4-6"},
-		{"claude-opus", "claude-opus-4-6-thinking"},
-		{"gemini-pro", "gemini-pro-agent"},
-		{"gpt-oss", "gpt-oss-120b-medium"},
+		{"gemini-3.8-flash", "gemini-3.8-flash-high"},
+		{"claude-3-7-sonnet", "gemini-3.8-flash-high"},
+		{"claude-opus", "gemini-3.8-flash-high"},
+		{"gemini-pro", "gemini-3.8-flash-high"},
+		{"gpt-oss", "gemini-3.8-flash-high"},
 	}
 
 	for _, tt := range tests {
@@ -61,10 +57,8 @@ func TestCuratedModelsContextLimits(t *testing.T) {
 	models := reg.GetAllModels()
 
 	expectedCanonical := map[string]int{
-		"claude-sonnet-4-6": 1048576,
-		"claude-opus-4-6":   1048576,
-		"gemini-3.8-flash":  1048576,
-		"gemini-3.7-flash":  1048576,
+		"gemini-3.8-flash":      1048576,
+		"gemini-3.8-flash-high": 1048576,
 	}
 
 	for id, expectedCtx := range expectedCanonical {

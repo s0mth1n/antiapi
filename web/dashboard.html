@@ -1189,6 +1189,72 @@
         justify-content: space-between;
       }
     }
+
+    @media (max-width: 640px) {
+      .header-container {
+        padding: 0.5rem 0.75rem;
+        gap: 0.5rem;
+      }
+      nav.app-tabs {
+        overflow-x: auto;
+        justify-content: flex-start;
+        gap: 4px;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+      }
+      nav.app-tabs::-webkit-scrollbar {
+        display: none;
+      }
+      .tab-item {
+        flex-shrink: 0;
+        padding: 0.35rem 0.6rem;
+        font-size: 11px;
+      }
+      .header-status-group {
+        width: 100%;
+        overflow-x: auto;
+        scrollbar-width: none;
+        padding-bottom: 2px;
+      }
+      .header-status-group::-webkit-scrollbar {
+        display: none;
+      }
+      .status-chip {
+        flex-shrink: 0;
+        font-size: 10.5px;
+        padding: 0.2rem 0.5rem;
+      }
+      .metric-strip {
+        padding: 0.5rem 0;
+      }
+      .metric-strip-inner {
+        grid-template-columns: 1fr 1fr;
+        gap: 0.6rem;
+        padding: 0 0.75rem;
+      }
+      .strip-card {
+        padding: 0.25rem 0.5rem;
+      }
+      .strip-value {
+        font-size: 13px;
+      }
+      main.app-main {
+        padding: 0.75rem 0.75rem 2rem 0.75rem;
+      }
+      .panel-header {
+        padding: 0.75rem 1rem;
+      }
+      .panel-body {
+        padding: 0.75rem;
+      }
+      .account-switcher-bar {
+        padding: 0.5rem 0.75rem;
+      }
+      .data-table th, .data-table td {
+        padding: 0.6rem 0.65rem;
+        font-size: 11.5px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1450,7 +1516,7 @@
         <div class="panel-body" style="padding: 0;">
           <div class="integration-layout">
             <div class="integration-sidebar">
-              <button class="snippet-nav-btn active" onclick="activateSnippet('remote', this)">Remote Laptops (Public)</button>
+              <button class="snippet-nav-btn active" onclick="activateSnippet('remote', this)">Environment Variables</button>
               <button class="snippet-nav-btn" onclick="activateSnippet('cursor', this)">Cursor / Windsurf</button>
               <button class="snippet-nav-btn" onclick="activateSnippet('hermes', this)">Hermes Agent</button>
               <button class="snippet-nav-btn" onclick="activateSnippet('python', this)">Python OpenAI SDK</button>
@@ -1692,16 +1758,10 @@
 
     // 2. Curated Models & Live Ping Tests
     const modelsCatalog = [
+      { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash (Standard)", tier: "Gemini", tagClass: "provider-gemini", context: "1M tokens" },
       { id: "gemini-3.8-flash-high", name: "Gemini 3.8 Flash (High)", tier: "Gemini", tagClass: "provider-gemini", context: "1M tokens" },
       { id: "gemini-3.8-flash-medium", name: "Gemini 3.8 Flash (Medium)", tier: "Gemini", tagClass: "provider-gemini", context: "1M tokens" },
-      { id: "gemini-3.8-flash-low", name: "Gemini 3.8 Flash (Low)", tier: "Gemini", tagClass: "provider-gemini", context: "1M tokens" },
-      { id: "gemini-3.7-flash-high", name: "Gemini 3.7 Flash (High)", tier: "Gemini", tagClass: "provider-gemini", context: "1M tokens" },
-      { id: "gemini-3.7-flash-medium", name: "Gemini 3.7 Flash (Medium)", tier: "Gemini", tagClass: "provider-gemini", context: "1M tokens" },
-      { id: "gemini-3.6-flash-medium", name: "Gemini 3.6 Flash (Medium)", tier: "Gemini", tagClass: "provider-gemini", context: "1M tokens" },
-      { id: "gemini-3.1-pro-high", name: "Gemini 3.1 Pro (High)", tier: "Pro", tagClass: "provider-pro", context: "2M tokens" },
-      { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", tier: "Claude", tagClass: "provider-claude", context: "200k tokens" },
-      { id: "claude-opus-4-6-thinking", name: "Claude Opus 4.6 (Thinking)", tier: "Claude", tagClass: "provider-claude", context: "200k tokens" },
-      { id: "gpt-oss-120b-medium", name: "GPT-OSS 120B (Medium)", tier: "GPT-OSS", tagClass: "provider-gpt", context: "128k tokens" }
+      { id: "gemini-3.8-flash-low", name: "Gemini 3.8 Flash (Low)", tier: "Gemini", tagClass: "provider-gemini", context: "1M tokens" }
     ];
 
     function renderModelsTable() {
@@ -2005,57 +2065,14 @@
 
       return {
         remote: {
-          filename: 'Remote Laptops (Other Networks) Setup Guide',
-          lang: 'Markdown / Setup',
-          code: `# ========================================================
-# HOW TO SETUP & USE ANTIAPI ON OTHER LAPTOPS / NETWORKS
-# ========================================================
+          filename: 'Quick Connect (Remote / Environment Variables)',
+          lang: 'Bash / Shell',
+          code: `# Configure OpenAI environment variables on your remote machine:
+export OPENAI_BASE_URL="${publicBaseUrl}/v1"
+export OPENAI_API_KEY="antiapi"
 
-1. HOST MACHINE (Your laptop running AntiAPI):
-   Start AntiAPI with the Cloudflare tunnel enabled:
-   $ /home/lev/pro/antiapi/antiapi --tunnel
-   (or: nix run .#tunnel)
-
-   Public Base URL:
-   ${publicBaseUrl}/v1
-
-2. OTHER LAPTOP CONFIGURATION (Zero Client Install):
-   The other person can be anywhere on the internet (home, office, cafe).
-   No VPN, Tailscale, or client software is required on their laptop.
-
-   Base URL : ${publicBaseUrl}/v1
-   API Key  : antiapi (or any placeholder string)
-
-3. CURSOR / WINDSURF SETUP (On their laptop):
-   • Open Settings > Models
-   • Under "OpenAI API Key", enter: antiapi
-   • Toggle "Override OpenAI Base URL" and enter:
-     ${publicBaseUrl}/v1
-   • Add models: gemini-3.8-flash-high, gemini-3.7-flash-high, claude-sonnet-4-6
-
-4. VS CODE (CONTINUE / CLINE EXTENSIONS):
-   Add to config.json:
-   {
-     "models": [
-       {
-         "title": "AntiAPI Gemini 3.8",
-         "provider": "openai",
-         "model": "gemini-3.8-flash-high",
-         "apiBase": "${publicBaseUrl}/v1",
-         "apiKey": "antiapi"
-       }
-     ]
-   }
-
-5. VERIFY CONNECTION (From their terminal):
-   curl -X POST "${publicBaseUrl}/v1/chat/completions" \\
-     -H "Content-Type: application/json" \\
-     -H "Authorization: Bearer antiapi" \\
-     -d '{
-       "model": "gemini-3.8-flash-high",
-       "messages": [{"role": "user", "content": "ping"}],
-       "stream": false
-     }'`
+# Verify connection:
+curl -s "${publicBaseUrl}/v1/models"`
         },
         cursor: {
           filename: 'Cursor / Windsurf Custom OpenAI Settings',
@@ -2065,12 +2082,10 @@
   "openai_base_url": "${baseUrl}/v1",
   "openai_api_key": "antiapi",
   "models": [
+    "gemini-3.8-flash",
     "gemini-3.8-flash-high",
     "gemini-3.8-flash-medium",
-    "gemini-3.7-flash-high",
-    "claude-sonnet-4-6",
-    "claude-opus-4-6-thinking",
-    "gemini-3.1-pro-high"
+    "gemini-3.8-flash-low"
   ]
 }`
         },
@@ -2080,7 +2095,7 @@
           code: `# ~/.hermes/config.yaml
 model:
   provider: anti-api
-  default: gemini-3.7-flash-high
+  default: gemini-3.8-flash
   base_url: ${baseUrl}/v1
   key_env: HERMES_CUSTOM_TOKENIN_API_KEY
 
@@ -2088,13 +2103,13 @@ providers:
   anti-api:
     name: Anti-API
     base_url: ${baseUrl}/v1
-    model: gemini-3.8-flash-high
+    model: gemini-3.8-flash
     discover_models: true
     models:
+      gemini-3.8-flash: {}
       gemini-3.8-flash-high: {}
-      gemini-3.7-flash-high: {}
-      claude-sonnet-4-6: {}
-      gemini-3.1-pro-high: {}`
+      gemini-3.8-flash-medium: {}
+      gemini-3.8-flash-low: {}`
         },
         python: {
           filename: 'antiapi_client.py',
