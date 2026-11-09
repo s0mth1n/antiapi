@@ -33,11 +33,12 @@ func maxTokensForModel(model string, requested *int) int {
 
 // OpenAI Data Structures
 type OpenAIMessage struct {
-	Role       string           `json:"role"`
-	Content    any              `json:"content"` // string or []any for multimodal
-	Name       string           `json:"name,omitempty"`
-	ToolCallID string           `json:"tool_call_id,omitempty"`
-	ToolCalls  []OpenAIToolCall `json:"tool_calls,omitempty"`
+	Role             string           `json:"role"`
+	Content          any              `json:"content"` // string or []any for multimodal
+	ReasoningContent string           `json:"reasoning_content,omitempty"`
+	Name             string           `json:"name,omitempty"`
+	ToolCallID       string           `json:"tool_call_id,omitempty"`
+	ToolCalls        []OpenAIToolCall `json:"tool_calls,omitempty"`
 }
 
 type OpenAIToolCall struct {
@@ -84,6 +85,8 @@ type OpenAIChatRequest struct {
 	ReasoningEffort     string          `json:"reasoning_effort,omitempty"`
 	Reasoning           any             `json:"reasoning,omitempty"`
 	ThinkingBudget      *int            `json:"thinking_budget,omitempty"`
+	Thinking            any             `json:"thinking,omitempty"`
+	ExtraBody           map[string]any  `json:"extra_body,omitempty"`
 	FastMode            *bool           `json:"fast_mode,omitempty"`
 	User                string          `json:"user,omitempty"`
 }
@@ -359,24 +362,83 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 		}
 	}
 
-	effort := strings.ToLower(strings.TrimSpace(req.ReasoningEffort))
-	if effort == "" && req.Reasoning != nil {
-		if rMap, ok := req.Reasoning.(map[string]any); ok {
+	reasoningVal := req.Reasoning
+	thinkingVal := req.Thinking
+	effortVal := req.ReasoningEffort
+	if req.ExtraBody != nil {
+		if effortVal == "" {
+			if e, ok := req.ExtraBody["reasoning_effort"].(string); ok {
+				effortVal = e
+			}
+		}
+		if reasoningVal == nil {
+			if r, ok := req.ExtraBody["reasoning"]; ok {
+				reasoningVal = r
+			}
+		}
+		if thinkingVal == nil {
+			if th, ok := req.ExtraBody["thinking"]; ok {
+				thinkingVal = th
+			}
+		}
+		if req.ThinkingBudget == nil {
+			if tb, ok := req.ExtraBody["thinking_budget"].(float64); ok {
+				b := int(tb)
+				thinkingBudget = &b
+			}
+		}
+	}
+
+	effort := strings.ToLower(strings.TrimSpace(effortVal))
+	if effort == "" && reasoningVal != nil {
+		if rBool, ok := reasoningVal.(bool); ok && !rBool {
+			effort = "none"
+		} else if rMap, ok := reasoningVal.(map[string]any); ok {
+			if enabled, ok := rMap["enabled"].(bool); ok && !enabled {
+				effort = "none"
+			}
 			if e, ok := rMap["effort"].(string); ok {
 				effort = strings.ToLower(strings.TrimSpace(e))
 			}
 			if maxTokens, ok := rMap["max_tokens"].(float64); ok && req.ThinkingBudget == nil {
 				b := int(maxTokens)
 				thinkingBudget = &b
+				if b == 0 && effort == "" {
+					effort = "none"
+				}
 			}
-		} else if rStr, ok := req.Reasoning.(string); ok {
+		} else if rStr, ok := reasoningVal.(string); ok {
 			effort = strings.ToLower(strings.TrimSpace(rStr))
+		}
+	}
+
+	if effort == "" && thinkingBudget == nil && thinkingVal != nil {
+		if tBool, ok := thinkingVal.(bool); ok && !tBool {
+			effort = "none"
+		} else if tMap, ok := thinkingVal.(map[string]any); ok {
+			if tType, ok := tMap["type"].(string); ok {
+				if tType == "disabled" || tType == "off" {
+					effort = "none"
+				}
+			}
+			if b, ok := tMap["budget_tokens"].(float64); ok && req.ThinkingBudget == nil {
+				bInt := int(b)
+				thinkingBudget = &bInt
+				if bInt == 0 && effort == "" {
+					effort = "none"
+				}
+			}
 		}
 	}
 
 	if req.ThinkingBudget != nil {
 		thinkingBudget = req.ThinkingBudget
-	} else if effort != "" {
+		if *thinkingBudget == 0 && effort == "" {
+			effort = "none"
+		}
+	}
+
+	if effort != "" {
 		switch effort {
 		case "none", "off", "disable", "disabled", "minimal":
 			zero := 0
@@ -420,6 +482,13 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 	} else if strings.HasSuffix(resolvedModel, "-medium") {
 		b := 512
 		thinkingBudget = &b
+	}
+
+	if thinkingBudget != nil && *thinkingBudget == 0 {
+		if strings.HasSuffix(resolvedModel, "-high") || strings.HasSuffix(resolvedModel, "-medium") {
+			resolvedModel = strings.TrimSuffix(strings.TrimSuffix(resolvedModel, "-high"), "-medium") + "-low"
+			gReq.Model = resolvedModel
+		}
 	}
 
 	if isFast || (thinkingBudget != nil && *thinkingBudget == 0) {
@@ -531,6 +600,12 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 
 		var parts []GooglePart
 		if msg.Role != "tool" {
+			if msg.Role == "assistant" && msg.ReasoningContent != "" {
+				parts = append(parts, GooglePart{
+					Text:    msg.ReasoningContent,
+					Thought: true,
+				})
+			}
 			parts = append(parts, extractOpenAIParts(msg.Content)...)
 		}
 
@@ -680,7 +755,7 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 		}
 	}
 
-	if isFast {
+	if isFast || (thinkingBudget != nil && *thinkingBudget == 0) {
 		const fastDirective = "Respond immediately and concisely. Do not use internal reasoning steps, scratchpads, or thinking deliberation."
 		systemParts = append(systemParts, GooglePart{Text: fastDirective})
 	}
@@ -811,12 +886,20 @@ func ConvertClaudeToGoogle(req *ClaudeRequest) (*GoogleRequest, string) {
 
 	if req.Thinking != nil {
 		tType, _ := req.Thinking["type"].(string)
-		if tType == "disabled" {
+		if tType == "disabled" || tType == "off" {
 			zero := 0
 			thinkingBudget = &zero
+			if strings.HasSuffix(resolvedModel, "-high") || strings.HasSuffix(resolvedModel, "-medium") {
+				resolvedModel = strings.TrimSuffix(strings.TrimSuffix(resolvedModel, "-high"), "-medium") + "-low"
+				gReq.Model = resolvedModel
+			}
 		} else if b, ok := req.Thinking["budget_tokens"].(float64); ok {
 			bInt := int(b)
 			thinkingBudget = &bInt
+			if bInt == 0 && (strings.HasSuffix(resolvedModel, "-high") || strings.HasSuffix(resolvedModel, "-medium")) {
+				resolvedModel = strings.TrimSuffix(strings.TrimSuffix(resolvedModel, "-high"), "-medium") + "-low"
+				gReq.Model = resolvedModel
+			}
 		}
 	} else if isFast || strings.HasSuffix(resolvedModel, "-low") {
 		zero := 0
@@ -824,6 +907,13 @@ func ConvertClaudeToGoogle(req *ClaudeRequest) (*GoogleRequest, string) {
 	} else if strings.HasSuffix(resolvedModel, "-medium") {
 		b := 512
 		thinkingBudget = &b
+	}
+
+	if thinkingBudget != nil && *thinkingBudget == 0 {
+		if strings.HasSuffix(resolvedModel, "-high") || strings.HasSuffix(resolvedModel, "-medium") {
+			resolvedModel = strings.TrimSuffix(strings.TrimSuffix(resolvedModel, "-high"), "-medium") + "-low"
+			gReq.Model = resolvedModel
+		}
 	}
 
 	if isFast || (thinkingBudget != nil && *thinkingBudget == 0) {
@@ -876,7 +966,7 @@ func ConvertClaudeToGoogle(req *ClaudeRequest) (*GoogleRequest, string) {
 			sysParts = append(sysParts, GooglePart{Text: sysText})
 		}
 	}
-	if isFast {
+	if isFast || (thinkingBudget != nil && *thinkingBudget == 0) {
 		const fastDirective = "Respond immediately and concisely. Do not use internal reasoning steps, scratchpads, or thinking deliberation."
 		sysParts = append(sysParts, GooglePart{Text: fastDirective})
 	}
@@ -987,6 +1077,13 @@ func extractOpenAIParts(content any) []GooglePart {
 					if textStr, ok := m["text"].(string); ok && textStr != "" {
 						parts = append(parts, GooglePart{Text: textStr})
 					}
+				case "thinking":
+					if thinkingText, ok := m["thinking"].(string); ok && thinkingText != "" {
+						parts = append(parts, GooglePart{
+							Text:    thinkingText,
+							Thought: true,
+						})
+					}
 				case "image_url":
 					if imgObj, ok := m["image_url"].(map[string]any); ok {
 						if urlStr, ok := imgObj["url"].(string); ok {
@@ -1030,6 +1127,13 @@ func extractClaudeParts(content any, callIDToThought, callIDToName map[string]st
 				case "text":
 					if textStr, ok := m["text"].(string); ok && textStr != "" {
 						parts = append(parts, GooglePart{Text: textStr})
+					}
+				case "thinking":
+					if thinkingText, ok := m["thinking"].(string); ok && thinkingText != "" {
+						parts = append(parts, GooglePart{
+							Text:    thinkingText,
+							Thought: true,
+						})
 					}
 				case "image":
 					if src, ok := m["source"].(map[string]any); ok {

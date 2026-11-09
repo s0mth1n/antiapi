@@ -942,6 +942,118 @@ func TestReasoningObjectUnpacking(t *testing.T) {
 	if !ok || tc["includeThoughts"] != true || tc["thinkingBudget"] != 8192 {
 		t.Errorf("expected includeThoughts:true and thinkingBudget:8192, got %v", tc)
 	}
+
+	// 1. Explicit reasoning enabled: false
+	reqDisabled := &OpenAIChatRequest{
+		Model:    "gemini-3.8-flash",
+		Messages: []OpenAIMessage{{Role: "user", Content: "test"}},
+		Reasoning: map[string]any{
+			"enabled": false,
+		},
+	}
+	gReqDisabled, _ := ConvertOpenAIToGoogle(reqDisabled)
+	if gReqDisabled.Model != "gemini-3.8-flash-low" {
+		t.Errorf("expected model gemini-3.8-flash-low for reasoning.enabled=false, got %s", gReqDisabled.Model)
+	}
+	tcDis, ok := gReqDisabled.Request.GenerationConfig["thinkingConfig"].(map[string]any)
+	if !ok || tcDis["thinkingBudget"] != 0 {
+		t.Errorf("expected thinkingBudget:0 for reasoning.enabled=false, got %v", tcDis)
+	}
+
+	// 2. Boolean reasoning: false
+	reqBoolFalse := &OpenAIChatRequest{
+		Model:     "gemini-3.8-flash",
+		Messages:  []OpenAIMessage{{Role: "user", Content: "test"}},
+		Reasoning: false,
+	}
+	gReqBool, _ := ConvertOpenAIToGoogle(reqBoolFalse)
+	if gReqBool.Model != "gemini-3.8-flash-low" {
+		t.Errorf("expected model gemini-3.8-flash-low for reasoning=false, got %s", gReqBool.Model)
+	}
+
+	// 3. Thinking object with type: disabled
+	reqThinkDis := &OpenAIChatRequest{
+		Model:    "gemini-3.8-flash",
+		Messages: []OpenAIMessage{{Role: "user", Content: "test"}},
+		Thinking: map[string]any{
+			"type": "disabled",
+		},
+	}
+	gReqThinkDis, _ := ConvertOpenAIToGoogle(reqThinkDis)
+	if gReqThinkDis.Model != "gemini-3.8-flash-low" {
+		t.Errorf("expected model gemini-3.8-flash-low for thinking.type=disabled, got %s", gReqThinkDis.Model)
+	}
+
+	// 4. ExtraBody with reasoning
+	reqExtra := &OpenAIChatRequest{
+		Model:    "gemini-3.8-flash",
+		Messages: []OpenAIMessage{{Role: "user", Content: "test"}},
+		ExtraBody: map[string]any{
+			"reasoning": map[string]any{"enabled": false},
+		},
+	}
+	gReqExtra, _ := ConvertOpenAIToGoogle(reqExtra)
+	if gReqExtra.Model != "gemini-3.8-flash-low" {
+		t.Errorf("expected model gemini-3.8-flash-low for extra_body reasoning disabled, got %s", gReqExtra.Model)
+	}
+
+	// 5. Reasoning max_tokens: 0
+	reqMax0 := &OpenAIChatRequest{
+		Model:    "gemini-3.8-flash",
+		Messages: []OpenAIMessage{{Role: "user", Content: "test"}},
+		Reasoning: map[string]any{
+			"max_tokens": float64(0),
+		},
+	}
+	gReqMax0, _ := ConvertOpenAIToGoogle(reqMax0)
+	if gReqMax0.Model != "gemini-3.8-flash-low" {
+		t.Errorf("expected model gemini-3.8-flash-low for max_tokens=0, got %s", gReqMax0.Model)
+	}
+
+	// 6. Assistant message with reasoning_content preserved in Google contents
+	reqHistory := &OpenAIChatRequest{
+		Model: "gemini-3.8-flash",
+		Messages: []OpenAIMessage{
+			{Role: "user", Content: "Hello"},
+			{Role: "assistant", Content: "Hi there!", ReasoningContent: "Deliberating greeting"},
+			{Role: "user", Content: "How are you?"},
+		},
+	}
+	gReqHist, _ := ConvertOpenAIToGoogle(reqHistory)
+	if len(gReqHist.Request.Contents) < 2 {
+		t.Fatalf("expected at least 2 contents turns, got %d", len(gReqHist.Request.Contents))
+	}
+	foundThought := false
+	for _, c := range gReqHist.Request.Contents {
+		if c.Role == "model" {
+			for _, p := range c.Parts {
+				if p.Thought && p.Text == "Deliberating greeting" {
+					foundThought = true
+				}
+			}
+		}
+	}
+	if !foundThought {
+		t.Errorf("expected reasoning_content to be translated into thought part in model turn")
+	}
+
+	// 7. Claude disabled thinking routes to -low and injects fastDirective
+	cReqDisabled := &ClaudeRequest{
+		Model:    "claude-3-7-sonnet",
+		Messages: []ClaudeMessage{{Role: "user", Content: "test"}},
+		Thinking: map[string]any{"type": "disabled"},
+	}
+	gReqClaudeDis, resolvedClaude := ConvertClaudeToGoogle(cReqDisabled)
+	if resolvedClaude != "gemini-3.8-flash-low" {
+		t.Errorf("expected claude disabled thinking to resolve to gemini-3.8-flash-low, got %s", resolvedClaude)
+	}
+	if gReqClaudeDis.Model != "gemini-3.8-flash-low" {
+		t.Errorf("expected google model gemini-3.8-flash-low, got %s", gReqClaudeDis.Model)
+	}
+	tcClaudeDis := gReqClaudeDis.Request.GenerationConfig["thinkingConfig"].(map[string]any)
+	if tcClaudeDis["thinkingBudget"] != 0 {
+		t.Errorf("expected thinkingBudget 0, got %v", tcClaudeDis)
+	}
 }
 
 func TestOpenAIStopSequences(t *testing.T) {
