@@ -2,6 +2,7 @@ package translator
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -238,7 +239,7 @@ func TestFormatClaudeNonStreamToolCalls(t *testing.T) {
 		},
 	}
 
-	respBytes := FormatClaudeNonStream("msg-123", "claude-3-7-sonnet", "", "", toolCalls, nil)
+	respBytes := FormatClaudeNonStream("msg-123", "claude-3-7-sonnet", "", "", toolCalls, nil, "")
 
 	var resp map[string]any
 	if err := json.Unmarshal(respBytes, &resp); err != nil {
@@ -565,7 +566,7 @@ func TestFormatOpenAINonStreamWithUsage(t *testing.T) {
 		TotalTokenCount:      30,
 		ThoughtsTokenCount:   5,
 	}
-	respBytes := FormatOpenAINonStream("cmpl-1", "gemini-3.8-flash-high", "Test response", "", nil, u)
+	respBytes := FormatOpenAINonStream("cmpl-1", "gemini-3.8-flash-high", "Test response", "", nil, u, "")
 	var resp struct {
 		Usage struct {
 			PromptTokens     int `json:"prompt_tokens"`
@@ -593,7 +594,7 @@ func TestFormatClaudeNonStreamWithUsage(t *testing.T) {
 		CandidatesTokenCount: 25,
 		TotalTokenCount:      75,
 	}
-	respBytes := FormatClaudeNonStream("msg-1", "claude-sonnet-4-6", "Claude text", "", nil, u)
+	respBytes := FormatClaudeNonStream("msg-1", "claude-sonnet-4-6", "Claude text", "", nil, u, "")
 	var resp struct {
 		Usage struct {
 			InputTokens  int `json:"input_tokens"`
@@ -1199,7 +1200,7 @@ func TestClaudeStopSequencesAndToolChoice(t *testing.T) {
 
 func TestOpenAITelemetry(t *testing.T) {
 	// Non-streaming response telemetry
-	respBytes := FormatOpenAINonStream("cmpl-123", "gemini-3.8-flash", "hello", "reasoning steps", nil, nil)
+	respBytes := FormatOpenAINonStream("cmpl-123", "gemini-3.8-flash", "hello", "reasoning steps", nil, nil, "")
 	var resp map[string]any
 	if err := json.Unmarshal(respBytes, &resp); err != nil {
 		t.Fatalf("failed to unmarshal non-stream response: %v", err)
@@ -1240,7 +1241,7 @@ func TestClaudeThinkingAndCacheTokens(t *testing.T) {
 		CachedContentTokenCount: 80,
 	}
 
-	respBytes := FormatClaudeNonStream("msg-456", "claude-3-7-sonnet", "final answer", "detailed thinking", nil, u)
+	respBytes := FormatClaudeNonStream("msg-456", "claude-3-7-sonnet", "final answer", "detailed thinking", nil, u, "")
 	var resp struct {
 		Content []struct {
 			Type     string `json:"type"`
@@ -1277,5 +1278,90 @@ func TestClaudeThinkingAndCacheTokens(t *testing.T) {
 	}
 	if resp.Usage.OutputTokens != 60 { // 40 candidates + 20 thoughts
 		t.Errorf("expected output_tokens 60, got %d", resp.Usage.OutputTokens)
+	}
+}
+
+func TestMapOpenAIFinishReason(t *testing.T) {
+	cases := map[string]string{
+		"STOP":                "stop",
+		"MAX_TOKENS":          "length",
+		"SAFETY":              "content_filter",
+		"RECITATION":          "content_filter",
+		"PROHIBITED_CONTENT":  "content_filter",
+		"TOOL_CALLS":          "tool_calls",
+		"STOP_UNSPECIFIED_XX": "stop",
+	}
+	for in, want := range cases {
+		if got := mapOpenAIFinishReason(in); got != want {
+			t.Errorf("mapOpenAIFinishReason(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestMapClaudeStopReason(t *testing.T) {
+	if got := mapClaudeStopReason("MAX_TOKENS", false); got != "max_tokens" {
+		t.Errorf("max_tokens: got %q", got)
+	}
+	if got := mapClaudeStopReason("SAFETY", false); got != "refusal" {
+		t.Errorf("safety: got %q", got)
+	}
+	if got := mapClaudeStopReason("STOP", false); got != "end_turn" {
+		t.Errorf("stop: got %q", got)
+	}
+	if got := mapClaudeStopReason("STOP", true); got != "tool_use" {
+		t.Errorf("tool calls win: got %q", got)
+	}
+}
+
+func TestFormatOpenAINonStreamFinishReasonMapping(t *testing.T) {
+	resp := FormatOpenAINonStream("cmpl-1", "m", "partial", "", nil, nil, "MAX_TOKENS")
+	var decoded struct {
+		Choices []struct {
+			FinishReason string `json:"finish_reason"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(resp, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if decoded.Choices[0].FinishReason != "length" {
+		t.Errorf("expected length, got %q", decoded.Choices[0].FinishReason)
+	}
+}
+
+func TestFormatClaudeNonStreamMaxTokens(t *testing.T) {
+	resp := FormatClaudeNonStream("msg-1", "m", "partial", "", nil, nil, "MAX_TOKENS")
+	var decoded struct {
+		StopReason string `json:"stop_reason"`
+	}
+	if err := json.Unmarshal(resp, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if decoded.StopReason != "max_tokens" {
+		t.Errorf("expected max_tokens, got %q", decoded.StopReason)
+	}
+}
+
+func TestToolCallMemoryEviction(t *testing.T) {
+	toolCallMu.Lock()
+	toolCallMemory = make(map[string]ToolCallInfo)
+	toolCallOrder = nil
+	toolCallMu.Unlock()
+
+	total := maxToolCallMemory + 100
+	for i := 0; i < total; i++ {
+		RecordToolCall("call-"+strconv.Itoa(i), "fn", "{}", "")
+	}
+
+	toolCallMu.RLock()
+	size := len(toolCallMemory)
+	toolCallMu.RUnlock()
+	if size > maxToolCallMemory {
+		t.Fatalf("memory not bounded: %d entries", size)
+	}
+	if _, ok := GetToolCall("call-" + strconv.Itoa(total-1)); !ok {
+		t.Errorf("newest entry should survive eviction")
+	}
+	if _, ok := GetToolCall("call-0"); ok {
+		t.Errorf("oldest entry should have been evicted")
 	}
 }

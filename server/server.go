@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -147,6 +148,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	start := time.Now()
 	lw := &statusLoggingResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+	if !s.requireAPIKey(lw, r) {
+		return
+	}
 	s.mux.ServeHTTP(lw, r)
 	dur := time.Since(start)
 
@@ -204,11 +208,52 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if data, err := os.ReadFile("web/dashboard.html"); err == nil {
-		w.Write(data)
-		return
+	var data []byte
+	if disk, err := os.ReadFile("web/dashboard.html"); err == nil {
+		data = disk
+	} else {
+		data = web.DashboardHTML
 	}
-	w.Write(web.DashboardHTML)
+	if apiKey != "" {
+		data = injectDashboardKey(data, apiKey)
+	}
+	w.Write(data)
+}
+
+// injectDashboardKey embeds the configured API key into the dashboard HTML so
+// the web UI can call the protected /api and /v1 endpoints. Only reachable
+// after the request already passed requireAPIKey.
+func injectDashboardKey(html []byte, key string) []byte {
+	escKey, _ := json.Marshal(key)
+	snippet := []byte(`<script>window.ANTIAPI_API_KEY=` + string(escKey) + `;</script></head>`)
+	return bytes.Replace(html, []byte("</head>"), snippet, 1)
+}
+
+// writeJSONError emits a spec-shaped error body with safe JSON escaping.
+func writeJSONError(w http.ResponseWriter, status int, payload map[string]any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	body, _ := json.Marshal(payload)
+	w.Write(body)
+}
+
+func writeOpenAIError(w http.ResponseWriter, status int, msg string) {
+	writeJSONError(w, status, map[string]any{
+		"error": map[string]any{
+			"message": msg,
+			"type":    "server_error",
+		},
+	})
+}
+
+func writeClaudeError(w http.ResponseWriter, status int, msg string) {
+	writeJSONError(w, status, map[string]any{
+		"type": "error",
+		"error": map[string]any{
+			"type":    "api_error",
+			"message": msg,
+		},
+	})
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -305,6 +350,8 @@ func (s *Server) handleAccounts(w http.ResponseWriter, r *http.Request) {
 		ProjectID        string `json:"projectId"`
 		IsRateLimited    bool   `json:"isRateLimited"`
 		RateLimitedUntil string `json:"rateLimitedUntil,omitempty"`
+		NeedsValidation  bool   `json:"needsValidation,omitempty"`
+		ValidationURL    string `json:"validationUrl,omitempty"`
 	}
 
 	res := []AccountInfo{}
@@ -320,6 +367,8 @@ func (s *Server) handleAccounts(w http.ResponseWriter, r *http.Request) {
 			ProjectID:        a.ProjectID,
 			IsRateLimited:    rl,
 			RateLimitedUntil: until,
+			NeedsValidation:  a.GetValidationURL() != "",
+			ValidationURL:    a.GetValidationURL(),
 		})
 	}
 	json.NewEncoder(w).Encode(map[string]any{"accounts": res})
@@ -435,11 +484,15 @@ func (s *Server) handleTunnel(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	json.NewEncoder(w).Encode(map[string]any{
+	resp := map[string]any{
 		"active":   mgr.IsActive(),
 		"starting": mgr.IsStarting(),
 		"url":      mgr.URL(),
-	})
+	}
+	if mgr.IsActive() && !APIKeyConfigured() {
+		resp["warning"] = "Public tunnel is active but ANTIAPI_API_KEY is not set: anyone with the URL can use this gateway."
+	}
+	json.NewEncoder(w).Encode(resp)
 }
 
 func (s *Server) handleOAuthLogin(w http.ResponseWriter, r *http.Request) {
@@ -589,7 +642,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(err.Error(), "(400)") {
 			statusCode = http.StatusBadRequest
 		}
-		http.Error(w, fmt.Sprintf(`{"error":{"message":"%s"}}`, err.Error()), statusCode)
+		writeOpenAIError(w, statusCode, err.Error())
 		return
 	}
 
@@ -646,13 +699,19 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	var fullReasoning strings.Builder
 	var allToolCalls []translator.OpenAIToolCall
 	var lastUsage *translator.GoogleUsageMetadata
+	var streamErr error
+	finishReason := ""
 	for event := range eventCh {
 		if event.Err != nil {
+			streamErr = event.Err
 			break
 		}
 		parsed, _ := translator.ParseGoogleSSEChunk(event.Data)
 		if parsed.Usage != nil {
 			lastUsage = parsed.Usage
+		}
+		if parsed.FinishReason != "" {
+			finishReason = parsed.FinishReason
 		}
 		fullText.WriteString(parsed.Text)
 		fullReasoning.WriteString(parsed.ReasoningText)
@@ -661,8 +720,13 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if streamErr != nil && fullText.Len() == 0 && fullReasoning.Len() == 0 && len(allToolCalls) == 0 {
+		writeOpenAIError(w, http.StatusBadGateway, "upstream stream failed: "+streamErr.Error())
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(translator.FormatOpenAINonStream(completionID, resolvedModel, fullText.String(), fullReasoning.String(), allToolCalls, lastUsage))
+	w.Write(translator.FormatOpenAINonStream(completionID, resolvedModel, fullText.String(), fullReasoning.String(), allToolCalls, lastUsage, finishReason))
 }
 
 func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
@@ -712,7 +776,7 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(err.Error(), "(400)") {
 			statusCode = http.StatusBadRequest
 		}
-		http.Error(w, fmt.Sprintf(`{"type":"error","error":{"type":"api_error","message":"%s"}}`, err.Error()), statusCode)
+		writeClaudeError(w, statusCode, err.Error())
 		return
 	}
 
@@ -739,7 +803,7 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 				"model":         resolvedModel,
 				"stop_reason":   nil,
 				"stop_sequence": nil,
-				"usage":         map[string]int{"input_tokens": 10, "output_tokens": 1},
+				"usage":         map[string]int{"input_tokens": 0, "output_tokens": 0},
 			},
 		}
 		msBytes, _ := json.Marshal(msgStart)
@@ -763,6 +827,15 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 
 			if parsed.Usage != nil {
 				lastUsage = parsed.Usage
+			}
+
+			if parsed.FinishReason != "" {
+				switch strings.ToUpper(parsed.FinishReason) {
+				case "MAX_TOKENS":
+					stopReason = "max_tokens"
+				case "SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII":
+					stopReason = "refusal"
+				}
 			}
 
 			if parsed.ReasoningText != "" {
@@ -843,9 +916,11 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":%d}\n\n", blockIndex)
 		}
 
-		outputTokens := 10
+		inputTokens := 0
+		outputTokens := 0
 		cacheReadTokens := 0
 		if lastUsage != nil {
+			inputTokens = lastUsage.PromptTokenCount
 			outputTokens = lastUsage.CandidatesTokenCount + lastUsage.ThoughtsTokenCount
 			if outputTokens == 0 && lastUsage.TotalTokenCount > lastUsage.PromptTokenCount {
 				outputTokens = lastUsage.TotalTokenCount - lastUsage.PromptTokenCount
@@ -860,6 +935,7 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 				"stop_sequence": nil,
 			},
 			"usage": map[string]int{
+				"input_tokens":                inputTokens,
 				"output_tokens":               outputTokens,
 				"cache_read_input_tokens":     cacheReadTokens,
 				"cache_creation_input_tokens": 0,
@@ -877,13 +953,19 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	var fullReasoning strings.Builder
 	var allToolCalls []translator.OpenAIToolCall
 	var lastUsage *translator.GoogleUsageMetadata
+	var streamErr error
+	finishReason := ""
 	for event := range eventCh {
 		if event.Err != nil {
+			streamErr = event.Err
 			break
 		}
 		parsed, _ := translator.ParseGoogleSSEChunk(event.Data)
 		if parsed.Usage != nil {
 			lastUsage = parsed.Usage
+		}
+		if parsed.FinishReason != "" {
+			finishReason = parsed.FinishReason
 		}
 		fullText.WriteString(parsed.Text)
 		fullReasoning.WriteString(parsed.ReasoningText)
@@ -892,8 +974,13 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if streamErr != nil && fullText.Len() == 0 && fullReasoning.Len() == 0 && len(allToolCalls) == 0 {
+		writeClaudeError(w, http.StatusBadGateway, "upstream stream failed: "+streamErr.Error())
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(translator.FormatClaudeNonStream(msgID, resolvedModel, fullText.String(), fullReasoning.String(), allToolCalls, lastUsage))
+	w.Write(translator.FormatClaudeNonStream(msgID, resolvedModel, fullText.String(), fullReasoning.String(), allToolCalls, lastUsage, finishReason))
 }
 
 func (s *Server) handleReorderAccounts(w http.ResponseWriter, r *http.Request) {

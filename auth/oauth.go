@@ -152,7 +152,7 @@ func StartOAuthCallbackListener() {
 
 	mux := http.NewServeMux()
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", OAuthCallbackPort),
+		Addr:    fmt.Sprintf("127.0.0.1:%d", OAuthCallbackPort),
 		Handler: mux,
 	}
 

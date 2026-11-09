@@ -1714,6 +1714,23 @@
   </div>
 
   <script>
+    // API key support: the server injects window.ANTIAPI_API_KEY when endpoint
+    // auth is enabled; otherwise a key saved from a previous visit is reused.
+    (function () {
+      const key = window.ANTIAPI_API_KEY || localStorage.getItem('antiapi_api_key') || '';
+      if (key) {
+        try { localStorage.setItem('antiapi_api_key', key); } catch (e) {}
+      }
+      const origFetch = window.fetch.bind(window);
+      window.fetch = function (url, opts) {
+        if (key && typeof url === 'string' && (url.startsWith('/api') || url.startsWith('/v1') || url.startsWith('/oauth'))) {
+          opts = opts || {};
+          opts.headers = Object.assign({}, opts.headers, { 'Authorization': 'Bearer ' + key });
+        }
+        return origFetch(url, opts);
+      };
+    })();
+
     // Global Application State
     let activeView = 'limits';
     let allQuotaSummaries = {};

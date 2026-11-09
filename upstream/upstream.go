@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -31,6 +32,8 @@ const (
 )
 
 var (
+	validationURLRegex = regexp.MustCompile("https://accounts\\.google\\.com[^\\s\\x22\\x27<>]+")
+
 	endpointCooldownMu sync.RWMutex
 	endpointCooldowns  = make(map[string]time.Time)
 
@@ -50,26 +53,33 @@ func setPreferredEndpoint(email, endpoint string) {
 	preferredEndpoint[email] = endpoint
 }
 
-func isEndpointInCooldown(endpoint string) bool {
+// endpointCooldownKey scopes a cooldown to one account on one endpoint: a 429
+// from Google is per-account quota, so it must not bench the endpoint for the
+// whole pool.
+func endpointCooldownKey(email, endpoint string) string {
+	return email + "|" + endpoint
+}
+
+func isEndpointInCooldown(email, endpoint string) bool {
 	endpointCooldownMu.RLock()
 	defer endpointCooldownMu.RUnlock()
-	expiry, exists := endpointCooldowns[endpoint]
+	expiry, exists := endpointCooldowns[endpointCooldownKey(email, endpoint)]
 	if !exists {
 		return false
 	}
 	return time.Now().Before(expiry)
 }
 
-func markEndpointCooldown(endpoint string, duration time.Duration) {
+func markEndpointCooldown(email, endpoint string, duration time.Duration) {
 	endpointCooldownMu.Lock()
 	defer endpointCooldownMu.Unlock()
-	endpointCooldowns[endpoint] = time.Now().Add(duration)
+	endpointCooldowns[endpointCooldownKey(email, endpoint)] = time.Now().Add(duration)
 }
 
-func clearEndpointCooldown(endpoint string) {
+func clearEndpointCooldown(email, endpoint string) {
 	endpointCooldownMu.Lock()
 	defer endpointCooldownMu.Unlock()
-	delete(endpointCooldowns, endpoint)
+	delete(endpointCooldowns, endpointCooldownKey(email, endpoint))
 }
 
 // ClearAllEndpointCooldowns flushes all active endpoint backoffs.
@@ -241,9 +251,9 @@ attempt:
 
 		endpoints := []string{StandardEndpoint, DailyEndpoint}
 		pref := getPreferredEndpoint(acc.Email)
-		if pref == DailyEndpoint && !isEndpointInCooldown(DailyEndpoint) {
+		if pref == DailyEndpoint && !isEndpointInCooldown(acc.Email, DailyEndpoint) {
 			endpoints = []string{DailyEndpoint, StandardEndpoint}
-		} else if isEndpointInCooldown(StandardEndpoint) && !isEndpointInCooldown(DailyEndpoint) {
+		} else if isEndpointInCooldown(acc.Email, StandardEndpoint) && !isEndpointInCooldown(acc.Email, DailyEndpoint) {
 			endpoints = []string{DailyEndpoint, StandardEndpoint}
 		}
 		saw429 := false
@@ -274,7 +284,7 @@ attempt:
 			}
 
 			if resp.StatusCode == http.StatusOK {
-				clearEndpointCooldown(base)
+				clearEndpointCooldown(acc.Email, base)
 				setPreferredEndpoint(acc.Email, base)
 				acc.RecordSuccess()
 				log.Printf("[Upstream] 200 OK via %s on account %s (Stealth TLS + %s)", base, acc.Email, ua)
@@ -299,7 +309,7 @@ attempt:
 
 			if resp.StatusCode == http.StatusTooManyRequests {
 				saw429 = true
-				markEndpointCooldown(base, 10*time.Minute)
+				markEndpointCooldown(acc.Email, base, 10*time.Minute)
 				log.Printf("[Upstream] 429 Quota Exceeded on %s via %s (placed on 10m cooldown): %s", acc.Email, base, string(body))
 				lastErr = fmt.Errorf("quota exceeded on %s: %s", acc.Email, string(body))
 				continue // try next endpoint before failing over account
@@ -307,6 +317,10 @@ attempt:
 
 			if resp.StatusCode == http.StatusForbidden {
 				log.Printf("[Upstream] 403 Forbidden on %s: %s", acc.Email, string(body))
+				if vURL := ExtractValidationURL(body); vURL != "" {
+					acc.SetValidationURL(vURL)
+					log.Printf("[Upstream] Account %s needs interactive validation: %s", acc.Email, vURL)
+				}
 				acc.RecordError(http.StatusForbidden)
 				lastErr = fmt.Errorf("account %s forbidden: %s", acc.Email, string(body))
 				break // failover to next account in pool
@@ -399,4 +413,34 @@ func (c *Client) streamReader(ctx context.Context, body io.ReadCloser, ch chan<-
 			return
 		}
 	}
+}
+
+// ExtractValidationURL pulls the interactive account-verification URL out of a
+// Google 403 VALIDATION_REQUIRED error body, when present.
+func ExtractValidationURL(body []byte) string {
+	var parsed struct {
+		Error struct {
+			Details []struct {
+				Reason   string `json:"reason"`
+				Metadata struct {
+					ValidationURL  string `json:"validationUrl"`
+					ValidationURL2 string `json:"validation_url"`
+				} `json:"metadata"`
+			} `json:"details"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &parsed); err == nil {
+		for _, d := range parsed.Error.Details {
+			if d.Metadata.ValidationURL != "" {
+				return d.Metadata.ValidationURL
+			}
+			if d.Metadata.ValidationURL2 != "" {
+				return d.Metadata.ValidationURL2
+			}
+		}
+	}
+	if m := validationURLRegex.Find(body); len(m) > 0 {
+		return string(m)
+	}
+	return ""
 }

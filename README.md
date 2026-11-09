@@ -216,6 +216,23 @@ print()
 | `-host` | `0.0.0.0` | Host address to bind |
 | `-no-tui` | `false` | Disable TUI and print raw streaming logs |
 | `-tunnel` | `false` | Launch a Cloudflare tunnel and print the public HTTPS URL |
+| `-api-key` | _(empty)_ | Require this key on all endpoints (or set `ANTIAPI_API_KEY`) |
+
+### Endpoint Authentication
+
+By default the gateway is open (local-only convenience). Set `-api-key` or the
+`ANTIAPI_API_KEY` environment variable to require a shared secret on every
+endpoint except `/health`:
+
+```bash
+ANTIAPI_API_KEY="my-secret" ./start.sh
+curl http://localhost:8964/v1/models -H "Authorization: Bearer my-secret"
+```
+
+Clients send it as `Authorization: Bearer <key>` (OpenAI style) or `x-api-key`
+(Anthropic style). The dashboard accepts `http://localhost:8964/?key=my-secret`
+once and remembers it in the browser. **Always set a key when using `-tunnel`:**
+a public tunnel URL without a key lets anyone spend your quota or add accounts.
 
 Example:
 ```bash

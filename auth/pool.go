@@ -29,6 +29,7 @@ type Account struct {
 	ProjectID          string             `json:"projectId"`
 	RateLimitedUntil   time.Time          `json:"rateLimitedUntil,omitempty"`
 	QuarantinedUntil   time.Time          `json:"quarantinedUntil,omitempty"`
+	ValidationURL      string             `json:"validationUrl,omitempty"`
 	ConsecutiveErrors  int                `json:"consecutiveErrors,omitempty"`
 	Quotas             map[string]float64 `json:"quotas,omitempty"` // Tier -> percentage
 	LastQuotaSummary   *UserQuotaSummary  `json:"-"`
@@ -123,6 +124,22 @@ func (a *Account) RecordSuccess() {
 	a.ConsecutiveErrors = 0
 	a.RateLimitedUntil = time.Time{}
 	a.QuarantinedUntil = time.Time{}
+	a.ValidationURL = ""
+}
+
+// SetValidationURL records the interactive verification URL Google returned
+// with a 403 VALIDATION_REQUIRED so UIs can link the user straight to it.
+func (a *Account) SetValidationURL(url string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.ValidationURL = url
+}
+
+// GetValidationURL returns the pending interactive verification URL, if any.
+func (a *Account) GetValidationURL() string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.ValidationURL
 }
 
 func (a *Account) RecordError(statusCode int) {

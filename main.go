@@ -49,6 +49,7 @@ func main() {
 	noTui := flag.Bool("no-tui", false, "Disable interactive TUI and use streaming logs")
 	enableTunnel := flag.Bool("tunnel", false, "Start a cloudflared public tunnel and expose the API over HTTPS")
 	fastMode := flag.Bool("fast-mode", false, "Enable low-latency fast mode (disables thinking budget for instant TTFT)")
+	apiKey := flag.String("api-key", "", "Require this API key on all endpoints (or set ANTIAPI_API_KEY). Strongly recommended with -tunnel")
 	flag.Parse()
 
 	if *fastMode || os.Getenv("ANTIAPI_FAST_MODE") == "1" || strings.ToLower(os.Getenv("ANTIAPI_FAST_MODE")) == "true" {
@@ -57,6 +58,10 @@ func main() {
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmsgprefix)
 	log.SetPrefix("[antiapi] ")
+
+	if *apiKey != "" {
+		server.SetAPIKey(*apiKey)
+	}
 
 	srv := server.NewServer()
 	addr := fmt.Sprintf("%s:%d", *host, *port)
@@ -135,6 +140,9 @@ func main() {
 	// Cloudflare Tunnel Manager initialization
 	tunnel.GetManager().Init(*port, func(url string) {
 		srv.SetPublicURL(url)
+		if !server.APIKeyConfigured() {
+			log.Printf("WARNING: public tunnel is live but no API key is set. Anyone with the URL can use this gateway. Set ANTIAPI_API_KEY or pass -api-key.")
+		}
 		if useTUI {
 			tui.SetTunnelURL(url)
 			tui.SetActivity(fmt.Sprintf("⚡ Tunnel active: %s", url))

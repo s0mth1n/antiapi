@@ -172,10 +172,29 @@ type ToolCallInfo struct {
 	ThoughtSignature string
 }
 
+const maxToolCallMemory = 20000
+
 var (
 	toolCallMu     sync.RWMutex
 	toolCallMemory = make(map[string]ToolCallInfo)
+	toolCallOrder  []string
 )
+
+// evictToolCallMemoryLocked drops the oldest entries once the map grows past
+// maxToolCallMemory so long-running gateways (e.g. on-device) do not leak.
+func evictToolCallMemoryLocked() {
+	if len(toolCallMemory) <= maxToolCallMemory {
+		return
+	}
+	drop := len(toolCallMemory) - maxToolCallMemory + maxToolCallMemory/10
+	if drop > len(toolCallOrder) {
+		drop = len(toolCallOrder)
+	}
+	for _, k := range toolCallOrder[:drop] {
+		delete(toolCallMemory, k)
+	}
+	toolCallOrder = append([]string(nil), toolCallOrder[drop:]...)
+}
 
 // PackCallID encodes thoughtSignature into the callID if present so stateless clients preserve it across restarts.
 func PackCallID(callID, thoughtSig string) string {
@@ -209,18 +228,25 @@ func RecordToolCall(id, name, args, thoughtSig string) {
 	}
 	toolCallMu.Lock()
 	defer toolCallMu.Unlock()
+	if _, exists := toolCallMemory[id]; !exists {
+		toolCallOrder = append(toolCallOrder, id)
+	}
 	toolCallMemory[id] = ToolCallInfo{
 		Name:             name,
 		Args:             args,
 		ThoughtSignature: thoughtSig,
 	}
 	if baseID != id {
+		if _, exists := toolCallMemory[baseID]; !exists {
+			toolCallOrder = append(toolCallOrder, baseID)
+		}
 		toolCallMemory[baseID] = ToolCallInfo{
 			Name:             name,
 			Args:             args,
 			ThoughtSignature: thoughtSig,
 		}
 	}
+	evictToolCallMemoryLocked()
 }
 
 func GetToolCall(id string) (ToolCallInfo, bool) {
@@ -1546,10 +1572,7 @@ func FormatOpenAIChunk(id, model, text, reasoningText, finishReason string, tool
 
 	var fr *string
 	if finishReason != "" {
-		mapped := "stop"
-		if strings.ToUpper(finishReason) == "MAX_TOKENS" {
-			mapped = "length"
-		}
+		mapped := mapOpenAIFinishReason(finishReason)
 		if len(toolCalls) > 0 || finishReason == "tool_calls" {
 			mapped = "tool_calls"
 		}
@@ -1578,8 +1601,22 @@ func FormatOpenAIChunk(id, model, text, reasoningText, finishReason string, tool
 	return "data: " + string(bytes) + "\n\n"
 }
 
+// mapOpenAIFinishReason converts a Google finishReason to the OpenAI vocabulary.
+func mapOpenAIFinishReason(googleReason string) string {
+	switch strings.ToUpper(googleReason) {
+	case "MAX_TOKENS":
+		return "length"
+	case "SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII":
+		return "content_filter"
+	case "TOOL_CALLS":
+		return "tool_calls"
+	default:
+		return "stop"
+	}
+}
+
 // FormatOpenAINonStream formats full response for non-streaming clients
-func FormatOpenAINonStream(id, model, content, reasoningContent string, toolCalls []OpenAIToolCall, u *GoogleUsageMetadata) []byte {
+func FormatOpenAINonStream(id, model, content, reasoningContent string, toolCalls []OpenAIToolCall, u *GoogleUsageMetadata, finishReason string) []byte {
 	type Message struct {
 		Role             string           `json:"role"`
 		Content          *string          `json:"content"`
@@ -1614,9 +1651,12 @@ func FormatOpenAINonStream(id, model, content, reasoningContent string, toolCall
 		rcPtr = &reasoningContent
 	}
 
-	finishReason := "stop"
+	mappedFinish := "stop"
+	if finishReason != "" {
+		mappedFinish = mapOpenAIFinishReason(finishReason)
+	}
 	if len(toolCalls) > 0 {
-		finishReason = "tool_calls"
+		mappedFinish = "tool_calls"
 	}
 
 	res := Response{
@@ -1637,7 +1677,7 @@ func FormatOpenAINonStream(id, model, content, reasoningContent string, toolCall
 				},
 				Logprobs:     nil,
 				Refusal:      nil,
-				FinishReason: finishReason,
+				FinishReason: mappedFinish,
 			},
 		},
 	}
@@ -1664,8 +1704,23 @@ func FormatOpenAINonStream(id, model, content, reasoningContent string, toolCall
 	return bytes
 }
 
+// mapClaudeStopReason converts a Google finishReason to the Anthropic vocabulary.
+func mapClaudeStopReason(googleReason string, hasToolCalls bool) string {
+	if hasToolCalls {
+		return "tool_use"
+	}
+	switch strings.ToUpper(googleReason) {
+	case "MAX_TOKENS":
+		return "max_tokens"
+	case "SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII":
+		return "refusal"
+	default:
+		return "end_turn"
+	}
+}
+
 // FormatClaudeNonStream formats response for Anthropic clients
-func FormatClaudeNonStream(id, model, content, reasoningContent string, toolCalls []OpenAIToolCall, u *GoogleUsageMetadata) []byte {
+func FormatClaudeNonStream(id, model, content, reasoningContent string, toolCalls []OpenAIToolCall, u *GoogleUsageMetadata, finishReason string) []byte {
 	type ClaudeContentBlock struct {
 		Type     string         `json:"type"`
 		Text     string         `json:"text,omitempty"`
@@ -1707,10 +1762,7 @@ func FormatClaudeNonStream(id, model, content, reasoningContent string, toolCall
 		})
 	}
 
-	stopReason := "end_turn"
-	if len(toolCalls) > 0 {
-		stopReason = "tool_use"
-	}
+	stopReason := mapClaudeStopReason(finishReason, len(toolCalls) > 0)
 
 	inputTokens := 0
 	outputTokens := 0
