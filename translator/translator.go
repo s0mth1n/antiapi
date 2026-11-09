@@ -75,6 +75,7 @@ type OpenAIChatRequest struct {
 	MaxTokens       *int            `json:"max_tokens,omitempty"`
 	Tools           []any           `json:"tools,omitempty"`
 	ReasoningEffort string          `json:"reasoning_effort,omitempty"`
+	Reasoning       any             `json:"reasoning,omitempty"`
 	ThinkingBudget  *int            `json:"thinking_budget,omitempty"`
 	FastMode        *bool           `json:"fast_mode,omitempty"`
 	User            string          `json:"user,omitempty"`
@@ -267,10 +268,24 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 		}
 	}
 
+	effort := strings.ToLower(strings.TrimSpace(req.ReasoningEffort))
+	if effort == "" && req.Reasoning != nil {
+		if rMap, ok := req.Reasoning.(map[string]any); ok {
+			if e, ok := rMap["effort"].(string); ok {
+				effort = strings.ToLower(strings.TrimSpace(e))
+			}
+			if maxTokens, ok := rMap["max_tokens"].(float64); ok && req.ThinkingBudget == nil {
+				b := int(maxTokens)
+				thinkingBudget = &b
+			}
+		} else if rStr, ok := req.Reasoning.(string); ok {
+			effort = strings.ToLower(strings.TrimSpace(rStr))
+		}
+	}
+
 	if req.ThinkingBudget != nil {
 		thinkingBudget = req.ThinkingBudget
-	} else if req.ReasoningEffort != "" {
-		effort := strings.ToLower(strings.TrimSpace(req.ReasoningEffort))
+	} else if effort != "" {
 		switch effort {
 		case "none", "off", "disable", "disabled", "minimal":
 			zero := 0
@@ -316,10 +331,19 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 		thinkingBudget = &b
 	}
 
-	if thinkingBudget != nil {
+	if isFast || (thinkingBudget != nil && *thinkingBudget == 0) {
+		zero := 0
 		gReq.Request.GenerationConfig["thinkingConfig"] = map[string]any{
-			"thinkingBudget": *thinkingBudget,
+			"thinkingBudget": zero,
 		}
+	} else {
+		thinkingConfig := map[string]any{
+			"includeThoughts": true,
+		}
+		if thinkingBudget != nil {
+			thinkingConfig["thinkingBudget"] = *thinkingBudget
+		}
+		gReq.Request.GenerationConfig["thinkingConfig"] = thinkingConfig
 	}
 
 	// 1. Process Tools declaration
@@ -684,10 +708,19 @@ func ConvertClaudeToGoogle(req *ClaudeRequest) (*GoogleRequest, string) {
 		thinkingBudget = &b
 	}
 
-	if thinkingBudget != nil {
+	if isFast || (thinkingBudget != nil && *thinkingBudget == 0) {
+		zero := 0
 		gReq.Request.GenerationConfig["thinkingConfig"] = map[string]any{
-			"thinkingBudget": *thinkingBudget,
+			"thinkingBudget": zero,
 		}
+	} else {
+		thinkingConfig := map[string]any{
+			"includeThoughts": true,
+		}
+		if thinkingBudget != nil {
+			thinkingConfig["thinkingBudget"] = *thinkingBudget
+		}
+		gReq.Request.GenerationConfig["thinkingConfig"] = thinkingConfig
 	}
 
 	// Handle Anthropic Tools declaration

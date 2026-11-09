@@ -790,14 +790,15 @@ func TestFastModeLogic(t *testing.T) {
 	SetGlobalFastMode(false)
 	defer SetGlobalFastMode(false)
 
-	// 1. Default request: No thinking config by default on standard model
+	// 1. Default request: includeThoughts is enabled by default on standard model
 	reqDefault := &OpenAIChatRequest{
 		Model:    "gemini-3.8-flash",
 		Messages: []OpenAIMessage{{Role: "user", Content: "hi"}},
 	}
 	gReq, _ := ConvertOpenAIToGoogle(reqDefault)
-	if _, ok := gReq.Request.GenerationConfig["thinkingConfig"]; ok {
-		t.Fatalf("expected no thinkingConfig for default request, got %v", gReq.Request.GenerationConfig["thinkingConfig"])
+	tc, ok := gReq.Request.GenerationConfig["thinkingConfig"].(map[string]any)
+	if !ok || tc["includeThoughts"] != true {
+		t.Fatalf("expected includeThoughts == true for default request, got %v", tc)
 	}
 
 	// 2. Explicit FastMode in request
@@ -808,7 +809,7 @@ func TestFastModeLogic(t *testing.T) {
 		FastMode: &fastTrue,
 	}
 	gReq, _ = ConvertOpenAIToGoogle(reqFast)
-	tc, ok := gReq.Request.GenerationConfig["thinkingConfig"].(map[string]any)
+	tc, ok = gReq.Request.GenerationConfig["thinkingConfig"].(map[string]any)
 	if !ok || tc["thinkingBudget"] != 0 {
 		t.Fatalf("expected thinkingBudget == 0 for FastMode=true, got %v", tc)
 	}
@@ -840,8 +841,9 @@ func TestFastModeLogic(t *testing.T) {
 		FastMode: &fastFalse,
 	}
 	gReq, _ = ConvertOpenAIToGoogle(reqOverride)
-	if _, ok := gReq.Request.GenerationConfig["thinkingConfig"]; ok {
-		t.Fatalf("expected thinkingConfig omitted when request explicitly sets FastMode=false, got %v", gReq.Request.GenerationConfig["thinkingConfig"])
+	tc, ok = gReq.Request.GenerationConfig["thinkingConfig"].(map[string]any)
+	if !ok || tc["includeThoughts"] != true {
+		t.Fatalf("expected includeThoughts == true when request explicitly sets FastMode=false, got %v", tc)
 	}
 
 	SetGlobalFastMode(false)
@@ -917,6 +919,27 @@ func TestHermesReasoningEffortLevels(t *testing.T) {
 			if tc["thinkingBudget"] != c.expectedBudget {
 				t.Errorf("effort %s: expected budget %d, got %v", c.effort, c.expectedBudget, tc["thinkingBudget"])
 			}
+			if c.expectedBudget != 0 && tc["includeThoughts"] != true {
+				t.Errorf("effort %s: expected includeThoughts == true", c.effort)
+			}
 		})
+	}
+}
+
+func TestReasoningObjectUnpacking(t *testing.T) {
+	req := &OpenAIChatRequest{
+		Model:    "gemini-3.8-flash",
+		Messages: []OpenAIMessage{{Role: "user", Content: "test"}},
+		Reasoning: map[string]any{
+			"effort": "high",
+		},
+	}
+	gReq, _ := ConvertOpenAIToGoogle(req)
+	if gReq.Model != "gemini-3.8-flash-high" {
+		t.Errorf("expected model gemini-3.8-flash-high, got %s", gReq.Model)
+	}
+	tc, ok := gReq.Request.GenerationConfig["thinkingConfig"].(map[string]any)
+	if !ok || tc["includeThoughts"] != true || tc["thinkingBudget"] != 8192 {
+		t.Errorf("expected includeThoughts:true and thinkingBudget:8192, got %v", tc)
 	}
 }
