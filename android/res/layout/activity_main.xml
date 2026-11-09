@@ -337,6 +337,54 @@
                         android:textStyle="bold" />
                 </LinearLayout>
 
+                <!-- 3b. Battery Saver -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp"
+                    android:background="@drawable/card_bg"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="monospace"
+                        android:text="BATTERY SAVER"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tv_battery_saver_status"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Wake Lock: Held (gateway always responsive)"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="Releasing the wake lock saves battery but Android may freeze the gateway when the screen is off. Applies on next server start."
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
+
+                    <Button
+                        android:id="@+id/btn_toggle_battery_saver"
+                        android:layout_width="match_parent"
+                        android:layout_height="40dp"
+                        android:layout_marginTop="10dp"
+                        android:background="@drawable/btn_secondary_bg"
+                        android:text="Enable Battery Saver"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
                 <!-- 4. Client Integration Quick Snippets -->
                 <LinearLayout
                     android:layout_width="match_parent"

@@ -52,9 +52,9 @@ func TestAPIKeyAcceptedViaBearerXAPIKeyAndQuery(t *testing.T) {
 	srv := NewServer()
 
 	cases := []struct {
-		name   string
-		setup  func(r *http.Request)
-		path   string
+		name  string
+		setup func(r *http.Request)
+		path  string
 	}{
 		{"bearer", func(r *http.Request) { r.Header.Set("Authorization", "Bearer secret-key") }, "/v1/models"},
 		{"x-api-key", func(r *http.Request) { r.Header.Set("x-api-key", "secret-key") }, "/v1/models"},

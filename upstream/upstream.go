@@ -257,6 +257,8 @@ attempt:
 			endpoints = []string{DailyEndpoint, StandardEndpoint}
 		}
 		saw429 := false
+		accountClient := transport.NewAccountClient(acc.Email, RequestTimeout)
+		retried401 := false
 		for _, base := range endpoints {
 			url := base + StreamPath
 			req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBytes))
@@ -272,7 +274,6 @@ attempt:
 			req.Header.Set("Accept", "text/event-stream")
 			req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 
-			accountClient := transport.NewAccountClient(acc.Email, RequestTimeout)
 			resp, err := accountClient.Do(req)
 			if err != nil {
 				if ctx.Err() != nil {
@@ -301,8 +302,40 @@ attempt:
 
 			if resp.StatusCode == http.StatusUnauthorized {
 				log.Printf("[Upstream] 401 for %s, refreshing token...", acc.Email)
-				if newToken, refErr := acc.Refresh(); refErr == nil {
+				if newToken, refErr := acc.Refresh(); refErr == nil && !retried401 {
+					// Retry the SAME endpoint once with the fresh token instead of
+					// wasting a round trip on the next endpoint.
+					retried401 = true
 					token = newToken
+					req2, err2 := http.NewRequestWithContext(ctx, "POST", base+StreamPath, bytes.NewReader(reqBytes))
+					if err2 == nil {
+						req2.Header.Set("Authorization", "Bearer "+token)
+						req2.Header.Set("Content-Type", "application/json")
+						req2.Header.Set("User-Agent", ua)
+						req2.Header.Set("X-Goog-Api-Client", clientVersion)
+						req2.Header.Set("Accept", "text/event-stream")
+						req2.Header.Set("Accept-Language", "en-US,en;q=0.9")
+						resp2, err3 := accountClient.Do(req2)
+						if err3 == nil && resp2.StatusCode == http.StatusOK {
+							clearEndpointCooldown(acc.Email, base)
+							setPreferredEndpoint(acc.Email, base)
+							acc.RecordSuccess()
+							log.Printf("[Upstream] 200 OK via %s on account %s after token refresh", base, acc.Email)
+							eventCh := make(chan SSEEvent, 64)
+							go func() {
+								defer acc.Release()
+								c.streamReader(ctx, resp2.Body, eventCh)
+							}()
+							return eventCh, nil
+						}
+						if err3 == nil {
+							body2, _ := io.ReadAll(resp2.Body)
+							resp2.Body.Close()
+							lastErr = fmt.Errorf("upstream error after token refresh (%d): %s", resp2.StatusCode, string(body2))
+						} else {
+							lastErr = err3
+						}
+					}
 				}
 				continue
 			}

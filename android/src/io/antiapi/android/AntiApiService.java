@@ -81,10 +81,14 @@ public class AntiApiService extends Service {
     private synchronized void startServer() {
         if (isRunning) return;
 
-        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
-        if (pm != null) {
-            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AntiAPI::ServerWakeLock");
-            wakeLock.acquire();
+        boolean batterySaver = getSharedPreferences("antiapi_prefs", Context.MODE_PRIVATE)
+                .getBoolean("battery_saver", false);
+        if (!batterySaver) {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (pm != null) {
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AntiAPI::ServerWakeLock");
+                wakeLock.acquire();
+            }
         }
 
         new Thread(this::runServerLoop, "AntiAPI-Server-Thread").start();
@@ -137,44 +141,8 @@ public class AntiApiService extends Service {
             updateNotification("AntiAPI running on :8964");
             appendLog("[System] AntiAPI process launched (PID: " + bin.getName() + ")");
 
-            Thread pollThread = new Thread(() -> {
-                while (isRunning) {
-                    try {
-                        Thread.sleep(3000);
-                        if (!isRunning) break;
-                        java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL("http://127.0.0.1:8964/api/status").openConnection();
-                        conn.setConnectTimeout(1500);
-                        conn.setReadTimeout(1500);
-                        if (conn.getResponseCode() == 200) {
-                            try (BufferedReader r = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
-                                StringBuilder sb = new StringBuilder();
-                                String l;
-                                while ((l = r.readLine()) != null) sb.append(l);
-                                String body = sb.toString();
-                                String resolved = "";
-                                if (body.contains("\"public_url\":\"https://") && !body.contains("api.trycloudflare.com")) {
-                                    int s = body.indexOf("\"public_url\":\"") + 14;
-                                    int e = body.indexOf("\"", s);
-                                    if (e > s) {
-                                        resolved = body.substring(s, e);
-                                    }
-                                }
-                                if (!resolved.equals(publicTunnelUrl)) {
-                                    publicTunnelUrl = resolved;
-                                    if (!resolved.isEmpty()) {
-                                        updateNotification("AntiAPI: " + resolved);
-                                    } else {
-                                        updateNotification("AntiAPI running on :8964");
-                                    }
-                                    notifyTunnelUrl(resolved);
-                                }
-                            }
-                        }
-                    } catch (Exception ignored) {}
-                }
-            });
-            pollThread.setDaemon(true);
-            pollThread.start();
+            // Tunnel URL is parsed from the process log stream below; no HTTP poll loop
+            // (the old 3s /api/status poll ran for the whole server lifetime).
 
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(serverProcess.getInputStream()))) {
                 String line;

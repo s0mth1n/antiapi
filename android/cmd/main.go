@@ -79,6 +79,10 @@ func main() {
 
 	transport.PrewarmConnection(upstream.StandardEndpoint)
 	transport.PrewarmConnection(upstream.DailyEndpoint)
+	for _, acc := range pool.GetAllAccounts() {
+		transport.PrewarmAccountConnection(acc.Email, upstream.StandardEndpoint)
+		transport.PrewarmAccountConnection(acc.Email, upstream.DailyEndpoint)
+	}
 
 	go func() {
 		time.Sleep(500 * time.Millisecond)
@@ -87,10 +91,17 @@ func main() {
 		}
 	}()
 
+	// Skip the refresh while idle: on a phone every fetch wakes the radio.
 	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
+		ticker := time.NewTicker(30 * time.Minute)
 		defer ticker.Stop()
+		var lastServed uint64
 		for range ticker.C {
+			total, _, _, _, _, _ := srv.GetMetrics()
+			if total == lastServed {
+				continue
+			}
+			lastServed = total
 			models.GetRegistry().FetchLiveModels()
 		}
 	}()
@@ -128,7 +139,7 @@ func main() {
 	<-stop
 	tunnel.GetManager().Stop()
 	log.Println("Shutting down gracefully...")
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = httpServer.Shutdown(ctx)
 	log.Println("Server stopped")

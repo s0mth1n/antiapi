@@ -261,14 +261,28 @@ func NewAccountClient(accountID string, timeout time.Duration) *http.Client {
 func PrewarmConnection(baseURL string) {
 	go func() {
 		client := NewClient(5 * time.Second)
-		req, err := http.NewRequest(http.MethodHead, baseURL, nil)
-		if err != nil {
-			return
-		}
-		SetStandardHeaders(req, "")
-		resp, err := client.Do(req)
-		if err == nil && resp != nil {
-			_ = resp.Body.Close()
-		}
+		prewarmOn(client, baseURL)
 	}()
+}
+
+// PrewarmAccountConnection warms the per-account transport that completions
+// actually use. PrewarmConnection alone only warms the shared transport,
+// which never serves a completion.
+func PrewarmAccountConnection(accountID, baseURL string) {
+	go func() {
+		client := NewAccountClient(accountID, 5*time.Second)
+		prewarmOn(client, baseURL)
+	}()
+}
+
+func prewarmOn(client *http.Client, baseURL string) {
+	req, err := http.NewRequest(http.MethodHead, baseURL, nil)
+	if err != nil {
+		return
+	}
+	SetStandardHeaders(req, "")
+	resp, err := client.Do(req)
+	if err == nil && resp != nil {
+		_ = resp.Body.Close()
+	}
 }

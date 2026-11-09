@@ -85,6 +85,7 @@ func NewServer() *Server {
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("/v1/chat/completions", s.cors(s.handleChatCompletions))
+	s.mux.HandleFunc("/v1/responses", s.cors(s.handleResponses))
 	s.mux.HandleFunc("/v1/messages", s.cors(s.handleMessages))
 	s.mux.HandleFunc("/v1/models", s.cors(s.handleModels))
 	s.mux.HandleFunc("/v1/models/", s.cors(s.handleModels))
@@ -208,16 +209,42 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	var data []byte
-	if disk, err := os.ReadFile("web/dashboard.html"); err == nil {
-		data = disk
-	} else {
-		data = web.DashboardHTML
-	}
+	data := dashboardBytes()
 	if apiKey != "" {
 		data = injectDashboardKey(data, apiKey)
 	}
 	w.Write(data)
+}
+
+var dashboardCache struct {
+	mu      sync.RWMutex
+	modTime time.Time
+	data    []byte
+}
+
+// dashboardBytes serves the dashboard from disk when it changed (dev mode),
+// otherwise from memory, falling back to the embedded copy.
+func dashboardBytes() []byte {
+	st, err := os.Stat("web/dashboard.html")
+	if err != nil {
+		return web.DashboardHTML
+	}
+	dashboardCache.mu.RLock()
+	if dashboardCache.data != nil && st.ModTime().Equal(dashboardCache.modTime) {
+		defer dashboardCache.mu.RUnlock()
+		return dashboardCache.data
+	}
+	dashboardCache.mu.RUnlock()
+
+	data, err := os.ReadFile("web/dashboard.html")
+	if err != nil {
+		return web.DashboardHTML
+	}
+	dashboardCache.mu.Lock()
+	dashboardCache.data = data
+	dashboardCache.modTime = st.ModTime()
+	dashboardCache.mu.Unlock()
+	return data
 }
 
 // injectDashboardKey embeds the configured API key into the dashboard HTML so
@@ -276,27 +303,19 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		selectedEmail = accountEmails[0]
 	}
 
+	// Serve whatever quota summaries are cached instantly; kick async refreshes
+	// for stale entries. Never block the status endpoint on upstream calls
+	// (a failing account can take ~12s to time out).
 	quotaSummaries := make(map[string]*auth.UserQuotaSummary)
-	type accResult struct {
-		email   string
-		summary *auth.UserQuotaSummary
-	}
-	resCh := make(chan accResult, len(accs))
-	var wg sync.WaitGroup
 	for _, a := range accs {
-		wg.Add(1)
-		go func(acc *auth.Account) {
-			defer wg.Done()
-			sum, err := acc.FetchQuotaSummary()
-			if err == nil && sum != nil {
-				resCh <- accResult{email: acc.Email, summary: sum}
+		if cached, fetchedAt := a.GetCachedQuotaSummary(); cached != nil {
+			quotaSummaries[a.Email] = cached
+			if time.Since(fetchedAt) > 60*time.Second {
+				go a.FetchQuotaSummary()
 			}
-		}(a)
-	}
-	wg.Wait()
-	close(resCh)
-	for r := range resCh {
-		quotaSummaries[r.email] = r.summary
+		} else {
+			go a.FetchQuotaSummary()
+		}
 	}
 
 	// Backwards compatibility percentages
@@ -496,6 +515,15 @@ func (s *Server) handleTunnel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleOAuthLogin(w http.ResponseWriter, r *http.Request) {
+	if !auth.OAuthConfigured() {
+		writeJSONError(w, http.StatusServiceUnavailable, map[string]any{
+			"error": map[string]any{
+				"message": auth.ErrOAuthNotConfigured.Error(),
+				"type":    "configuration_error",
+			},
+		})
+		return
+	}
 	auth.StartOAuthCallbackListener()
 	authURL, _ := auth.GenerateAuthURL()
 	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
@@ -685,7 +713,10 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		}
 
-		if lastUsage != nil {
+		// Spec: emit the trailing usage chunk only when the client opts in via
+		// stream_options.include_usage. Default to sending it when stream_options
+		// is absent entirely - several gateway clients (e.g. Hermes) depend on it.
+		if lastUsage != nil && (req.StreamOptions == nil || req.StreamOptions.IncludeUsage) {
 			w.Write([]byte(translator.FormatOpenAIUsageChunk(completionID, resolvedModel, lastUsage)))
 			flusher.Flush()
 		}

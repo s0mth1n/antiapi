@@ -89,7 +89,12 @@ func main() {
 		homeDir, _ := os.UserHomeDir()
 		logDir := filepath.Join(homeDir, ".anti-api")
 		os.MkdirAll(logDir, 0755)
-		if logFile, err := os.OpenFile(filepath.Join(logDir, "antiapi.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+		logPath := filepath.Join(logDir, "antiapi.log")
+		if st, err := os.Stat(logPath); err == nil && st.Size() > 5*1024*1024 {
+			os.Remove(logPath + ".old")
+			os.Rename(logPath, logPath+".old")
+		}
+		if logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
 			log.SetOutput(logFile)
 		} else {
 			log.SetOutput(io.Discard)
@@ -116,9 +121,15 @@ func main() {
 		}
 	}
 
-	// Prewarm HTTP/2 multiplexed connections to Google Cloud Code upstream
+	// Prewarm HTTP/2 multiplexed connections to Google Cloud Code upstream.
+	// Completions use per-account transports, so warm those too or the first
+	// request per account still pays a full handshake.
 	transport.PrewarmConnection(upstream.StandardEndpoint)
 	transport.PrewarmConnection(upstream.DailyEndpoint)
+	for _, acc := range pool.GetAllAccounts() {
+		transport.PrewarmAccountConnection(acc.Email, upstream.StandardEndpoint)
+		transport.PrewarmAccountConnection(acc.Email, upstream.DailyEndpoint)
+	}
 
 	// Fetch initial models in background
 	go func() {
@@ -128,11 +139,18 @@ func main() {
 		}
 	}()
 
-	// Periodic model & quota refresh
+	// Periodic model refresh, skipped while the gateway is idle so an unused
+	// server does not wake the network around the clock.
 	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
+		ticker := time.NewTicker(30 * time.Minute)
 		defer ticker.Stop()
+		var lastServed uint64
 		for range ticker.C {
+			total, _, _, _, _, _ := srv.GetMetrics()
+			if total == lastServed {
+				continue
+			}
+			lastServed = total
 			models.GetRegistry().FetchLiveModels()
 		}
 	}()
@@ -188,7 +206,7 @@ func main() {
 	}
 	log.Println("Shutting down gracefully...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := httpServer.Shutdown(ctx); err != nil {
 		log.Printf("Server shutdown error: %v", err)

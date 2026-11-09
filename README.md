@@ -1,6 +1,6 @@
 # AntiAPI Gateway
 
-A lightweight, zero-dependency, high-performance API gateway written in **Go** that exposes Google Antigravity as a standard OpenAI (`/v1/chat/completions`, `/v1/models`) and Anthropic (`/v1/messages`) compatible server.
+A lightweight, zero-dependency, high-performance API gateway written in **Go** that exposes Google Antigravity as a standard OpenAI (`/v1/chat/completions`, `/v1/responses`, `/v1/models`) and Anthropic (`/v1/messages`) compatible server.
 
 Runs natively on **macOS (Apple Silicon M1/M2/M3/M4 & Intel x86_64)** and **Linux (x86_64 & ARM64)** with zero runtime dependencies.
 
@@ -94,6 +94,25 @@ export ANTIGRAVITY_REFRESH_TOKEN="1//04..."
 }
 ```
 
+### OAuth client credentials (only needed for token refresh and the web login flow)
+
+Tokens discovered from a local Antigravity/VS Code installation work with no extra setup. To let the gateway **refresh** those tokens or add an account through the browser login flow (`/oauth/login`), the gateway needs the OAuth client credentials those tokens were issued to:
+
+1. Environment variables:
+   ```bash
+   export ANTIAPI_OAUTH_CLIENT_ID="...apps.googleusercontent.com"
+   export ANTIAPI_OAUTH_CLIENT_SECRET="..."
+   ```
+2. Or a config file at `~/.antigravity-api/config.json`:
+   ```json
+   {
+     "oauthClientId": "...apps.googleusercontent.com",
+     "oauthClientSecret": "..."
+   }
+   ```
+
+They are the public "installed app" OAuth client values of the Antigravity IDE, visible in plain text inside a local Antigravity installation (search the IDE's resources for the `apps.googleusercontent.com` client ID; the secret sits next to it). You can also create your own OAuth 2.0 **Desktop app** client in Google Cloud Console and use that pair. Without them the gateway still serves requests for tokens that are currently valid, but token refresh fails when they expire and `/oauth/login` returns 503.
+
 ---
 
 ## Client Configurations
@@ -141,6 +160,27 @@ Any client supporting OpenAI or Anthropic format works out-of-the-box. Use `http
 }
 ```
 
+### Codex CLI
+
+Codex speaks the OpenAI Responses API, which the gateway serves at `/v1/responses`. In `~/.codex/config.toml`:
+
+```toml
+model_provider = "antiapi"
+model = "gemini-3.8-flash"
+
+[model_providers.antiapi]
+name = "AntiAPI"
+base_url = "http://127.0.0.1:8964/v1"
+env_key = "OPENAI_API_KEY"
+wire_api = "responses"
+```
+
+```bash
+export OPENAI_API_KEY="antigravity"
+```
+
+(If you set `-api-key` / `ANTIAPI_API_KEY` on the gateway, use that value instead.)
+
 ### Hermes Agent
 
 Set the environment variables:
@@ -182,7 +222,18 @@ curl http://localhost:8964/v1/messages \
   }'
 ```
 
-### 3. Python SDK (`openai`)
+### 3. Responses API (Codex-style)
+```bash
+curl -N http://localhost:8964/v1/responses \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gemini-3.8-flash",
+    "input": "Explain goroutines in one sentence.",
+    "stream": true
+  }'
+```
+
+### 4. Python SDK (`openai`)
 ```python
 from openai import OpenAI
 
@@ -214,6 +265,10 @@ print()
 | `-no-tui` | `false` | Disable TUI and print raw streaming logs |
 | `-tunnel` | `false` | Launch a Cloudflare tunnel and print the public HTTPS URL |
 | `-api-key` | _(empty)_ | Require this key on all endpoints (or set `ANTIAPI_API_KEY`) |
+
+### Anthropic prompt caching
+
+`cache_control` markers in Anthropic requests are accepted and safely ignored: Google's caching for this upstream is implicit and server-side, so explicit cache breakpoints change nothing.
 
 ### Endpoint Authentication
 
