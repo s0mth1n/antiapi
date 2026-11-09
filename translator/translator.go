@@ -66,19 +66,26 @@ type StreamOptions struct {
 }
 
 type OpenAIChatRequest struct {
-	Model           string          `json:"model"`
-	Messages        []OpenAIMessage `json:"messages"`
-	Stream          bool            `json:"stream"`
-	StreamOptions   *StreamOptions  `json:"stream_options,omitempty"`
-	Temperature     *float64        `json:"temperature,omitempty"`
-	TopP            *float64        `json:"top_p,omitempty"`
-	MaxTokens       *int            `json:"max_tokens,omitempty"`
-	Tools           []any           `json:"tools,omitempty"`
-	ReasoningEffort string          `json:"reasoning_effort,omitempty"`
-	Reasoning       any             `json:"reasoning,omitempty"`
-	ThinkingBudget  *int            `json:"thinking_budget,omitempty"`
-	FastMode        *bool           `json:"fast_mode,omitempty"`
-	User            string          `json:"user,omitempty"`
+	Model               string          `json:"model"`
+	Messages            []OpenAIMessage `json:"messages"`
+	Stream              bool            `json:"stream"`
+	StreamOptions       *StreamOptions  `json:"stream_options,omitempty"`
+	Temperature         *float64        `json:"temperature,omitempty"`
+	TopP                *float64        `json:"top_p,omitempty"`
+	MaxTokens           *int            `json:"max_tokens,omitempty"`
+	MaxCompletionTokens *int            `json:"max_completion_tokens,omitempty"`
+	Stop                any             `json:"stop,omitempty"`
+	ResponseFormat      any             `json:"response_format,omitempty"`
+	Seed                *int            `json:"seed,omitempty"`
+	PresencePenalty     *float64        `json:"presence_penalty,omitempty"`
+	FrequencyPenalty    *float64        `json:"frequency_penalty,omitempty"`
+	Tools               []any           `json:"tools,omitempty"`
+	ToolChoice          any             `json:"tool_choice,omitempty"`
+	ReasoningEffort     string          `json:"reasoning_effort,omitempty"`
+	Reasoning           any             `json:"reasoning,omitempty"`
+	ThinkingBudget      *int            `json:"thinking_budget,omitempty"`
+	FastMode            *bool           `json:"fast_mode,omitempty"`
+	User                string          `json:"user,omitempty"`
 }
 
 // Anthropic Data Structures
@@ -88,17 +95,19 @@ type ClaudeMessage struct {
 }
 
 type ClaudeRequest struct {
-	Model       string          `json:"model"`
-	Messages    []ClaudeMessage `json:"messages"`
-	System      any             `json:"system,omitempty"`
-	Stream      bool            `json:"stream"`
-	Temperature *float64        `json:"temperature,omitempty"`
-	TopP        *float64        `json:"top_p,omitempty"`
-	MaxTokens   *int            `json:"max_tokens,omitempty"`
-	Tools       []any           `json:"tools,omitempty"`
-	Thinking    map[string]any  `json:"thinking,omitempty"`
-	FastMode    *bool           `json:"fast_mode,omitempty"`
-	Metadata    map[string]any  `json:"metadata,omitempty"`
+	Model         string          `json:"model"`
+	Messages      []ClaudeMessage `json:"messages"`
+	System        any             `json:"system,omitempty"`
+	Stream        bool            `json:"stream"`
+	Temperature   *float64        `json:"temperature,omitempty"`
+	TopP          *float64        `json:"top_p,omitempty"`
+	MaxTokens     *int            `json:"max_tokens,omitempty"`
+	StopSequences []string        `json:"stop_sequences,omitempty"`
+	Tools         []any           `json:"tools,omitempty"`
+	ToolChoice    any             `json:"tool_choice,omitempty"`
+	Thinking      map[string]any  `json:"thinking,omitempty"`
+	FastMode      *bool           `json:"fast_mode,omitempty"`
+	Metadata      map[string]any  `json:"metadata,omitempty"`
 }
 
 // Upstream Google Cloud Code Structures
@@ -143,6 +152,7 @@ type GoogleRequest struct {
 		} `json:"systemInstruction,omitempty"`
 		GenerationConfig map[string]any `json:"generationConfig,omitempty"`
 		Tools            []any          `json:"tools,omitempty"`
+		ToolConfig       any            `json:"toolConfig,omitempty"`
 	} `json:"request"`
 }
 
@@ -237,7 +247,11 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 		Project: project,
 	}
 
-	maxTokens := maxTokensForModel(resolvedModel, req.MaxTokens)
+	effectiveMaxTokens := req.MaxTokens
+	if effectiveMaxTokens == nil && req.MaxCompletionTokens != nil {
+		effectiveMaxTokens = req.MaxCompletionTokens
+	}
+	maxTokens := maxTokensForModel(resolvedModel, effectiveMaxTokens)
 	gReq.Request.GenerationConfig = map[string]any{
 		"maxOutputTokens": maxTokens,
 	}
@@ -246,6 +260,83 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 	}
 	if req.TopP != nil {
 		gReq.Request.GenerationConfig["topP"] = *req.TopP
+	}
+	if req.Seed != nil {
+		gReq.Request.GenerationConfig["seed"] = *req.Seed
+	}
+	if req.PresencePenalty != nil {
+		gReq.Request.GenerationConfig["presencePenalty"] = *req.PresencePenalty
+	}
+	if req.FrequencyPenalty != nil {
+		gReq.Request.GenerationConfig["frequencyPenalty"] = *req.FrequencyPenalty
+	}
+
+	if req.Stop != nil {
+		var stopSeqs []string
+		switch v := req.Stop.(type) {
+		case string:
+			if v != "" {
+				stopSeqs = append(stopSeqs, v)
+			}
+		case []any:
+			for _, s := range v {
+				if str, ok := s.(string); ok && str != "" {
+					stopSeqs = append(stopSeqs, str)
+				}
+			}
+		case []string:
+			stopSeqs = append(stopSeqs, v...)
+		}
+		if len(stopSeqs) > 0 {
+			gReq.Request.GenerationConfig["stopSequences"] = stopSeqs
+		}
+	}
+
+	if req.ResponseFormat != nil {
+		if rfMap, ok := req.ResponseFormat.(map[string]any); ok {
+			rfType, _ := rfMap["type"].(string)
+			if rfType == "json_object" {
+				gReq.Request.GenerationConfig["responseMimeType"] = "application/json"
+			} else if rfType == "json_schema" {
+				gReq.Request.GenerationConfig["responseMimeType"] = "application/json"
+				if jsObj, ok := rfMap["json_schema"].(map[string]any); ok {
+					if schema, ok := jsObj["schema"]; ok {
+						gReq.Request.GenerationConfig["responseSchema"] = SanitizeGoogleSchema(schema)
+					}
+				}
+			}
+		}
+	}
+
+	if req.ToolChoice != nil {
+		switch tc := req.ToolChoice.(type) {
+		case string:
+			switch strings.ToLower(tc) {
+			case "none":
+				gReq.Request.ToolConfig = map[string]any{
+					"functionCallingConfig": map[string]any{"mode": "NONE"},
+				}
+			case "auto":
+				gReq.Request.ToolConfig = map[string]any{
+					"functionCallingConfig": map[string]any{"mode": "AUTO"},
+				}
+			case "required":
+				gReq.Request.ToolConfig = map[string]any{
+					"functionCallingConfig": map[string]any{"mode": "ANY"},
+				}
+			}
+		case map[string]any:
+			if fnMap, ok := tc["function"].(map[string]any); ok {
+				if fnName, ok := fnMap["name"].(string); ok && fnName != "" {
+					gReq.Request.ToolConfig = map[string]any{
+						"functionCallingConfig": map[string]any{
+							"mode":                 "ANY",
+							"allowedFunctionNames": []string{fnName},
+						},
+					}
+				}
+			}
+		}
 	}
 
 	var thinkingBudget *int
@@ -669,6 +760,33 @@ func ConvertClaudeToGoogle(req *ClaudeRequest) (*GoogleRequest, string) {
 	}
 	if req.TopP != nil {
 		gReq.Request.GenerationConfig["topP"] = *req.TopP
+	}
+	if len(req.StopSequences) > 0 {
+		gReq.Request.GenerationConfig["stopSequences"] = req.StopSequences
+	}
+	if req.ToolChoice != nil {
+		if tcMap, ok := req.ToolChoice.(map[string]any); ok {
+			tcType, _ := tcMap["type"].(string)
+			switch tcType {
+			case "auto":
+				gReq.Request.ToolConfig = map[string]any{
+					"functionCallingConfig": map[string]any{"mode": "AUTO"},
+				}
+			case "any":
+				gReq.Request.ToolConfig = map[string]any{
+					"functionCallingConfig": map[string]any{"mode": "ANY"},
+				}
+			case "tool":
+				if name, ok := tcMap["name"].(string); ok && name != "" {
+					gReq.Request.ToolConfig = map[string]any{
+						"functionCallingConfig": map[string]any{
+							"mode":                 "ANY",
+							"allowedFunctionNames": []string{name},
+						},
+					}
+				}
+			}
+		}
 	}
 
 	var thinkingBudget *int
@@ -1189,11 +1307,12 @@ func FormatOpenAIUsageChunk(id, model string, u *GoogleUsageMetadata) string {
 	}
 
 	payload := map[string]any{
-		"id":      id,
-		"object":  "chat.completion.chunk",
-		"created": time.Now().Unix(),
-		"model":   model,
-		"choices": []any{},
+		"id":                 id,
+		"object":             "chat.completion.chunk",
+		"created":            time.Now().Unix(),
+		"model":              model,
+		"system_fingerprint": "fp_antiapi",
+		"choices":            []any{},
 		"usage": map[string]any{
 			"prompt_tokens":     u.PromptTokenCount,
 			"completion_tokens": completionTokens,
@@ -1232,7 +1351,7 @@ func FormatOpenAIChunk(id, model, text, reasoningText, finishReason string, tool
 			buf.WriteString(strconv.FormatInt(now, 10))
 			buf.WriteString(",\"model\":\"")
 			buf.WriteString(model)
-			buf.WriteString("\",\"choices\":[{\"index\":0,\"delta\":{\"content\":")
+			buf.WriteString("\",\"system_fingerprint\":\"fp_antiapi\",\"choices\":[{\"index\":0,\"delta\":{\"content\":")
 			buf.Write(escText)
 			buf.WriteString("},\"finish_reason\":null}]}\n\n")
 			s := buf.String()
@@ -1248,7 +1367,7 @@ func FormatOpenAIChunk(id, model, text, reasoningText, finishReason string, tool
 			buf.WriteString(strconv.FormatInt(now, 10))
 			buf.WriteString(",\"model\":\"")
 			buf.WriteString(model)
-			buf.WriteString("\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":")
+			buf.WriteString("\",\"system_fingerprint\":\"fp_antiapi\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":")
 			buf.Write(escReas)
 			buf.WriteString("},\"finish_reason\":null}]}\n\n")
 			s := buf.String()
@@ -1265,7 +1384,7 @@ func FormatOpenAIChunk(id, model, text, reasoningText, finishReason string, tool
 			buf.WriteString(strconv.FormatInt(now, 10))
 			buf.WriteString(",\"model\":\"")
 			buf.WriteString(model)
-			buf.WriteString("\",\"choices\":[{\"index\":0,\"delta\":{\"content\":")
+			buf.WriteString("\",\"system_fingerprint\":\"fp_antiapi\",\"choices\":[{\"index\":0,\"delta\":{\"content\":")
 			buf.Write(escText)
 			buf.WriteString(",\"reasoning_content\":")
 			buf.Write(escReas)
@@ -1282,11 +1401,12 @@ func FormatOpenAIChunk(id, model, text, reasoningText, finishReason string, tool
 		FinishReason *string        `json:"finish_reason"`
 	}
 	type Chunk struct {
-		ID      string   `json:"id"`
-		Object  string   `json:"object"`
-		Created int64    `json:"created"`
-		Model   string   `json:"model"`
-		Choices []Choice `json:"choices"`
+		ID                string   `json:"id"`
+		Object            string   `json:"object"`
+		Created           int64    `json:"created"`
+		Model             string   `json:"model"`
+		SystemFingerprint string   `json:"system_fingerprint"`
+		Choices           []Choice `json:"choices"`
 	}
 
 	delta := make(map[string]any)
@@ -1336,10 +1456,11 @@ func FormatOpenAIChunk(id, model, text, reasoningText, finishReason string, tool
 	}
 
 	c := Chunk{
-		ID:      id,
-		Object:  "chat.completion.chunk",
-		Created: time.Now().Unix(),
-		Model:   model,
+		ID:                id,
+		Object:            "chat.completion.chunk",
+		Created:           time.Now().Unix(),
+		Model:             model,
+		SystemFingerprint: "fp_antiapi",
 		Choices: []Choice{
 			{
 				Index:        0,
@@ -1358,21 +1479,25 @@ func FormatOpenAINonStream(id, model, content, reasoningContent string, toolCall
 	type Message struct {
 		Role             string           `json:"role"`
 		Content          *string          `json:"content"`
+		Refusal          *string          `json:"refusal"`
 		ReasoningContent *string          `json:"reasoning_content,omitempty"`
 		ToolCalls        []OpenAIToolCall `json:"tool_calls,omitempty"`
 	}
 	type Choice struct {
 		Index        int     `json:"index"`
 		Message      Message `json:"message"`
+		Logprobs     any     `json:"logprobs"`
+		Refusal      *string `json:"refusal"`
 		FinishReason string  `json:"finish_reason"`
 	}
 	type Response struct {
-		ID      string         `json:"id"`
-		Object  string         `json:"object"`
-		Created int64          `json:"created"`
-		Model   string         `json:"model"`
-		Choices []Choice       `json:"choices"`
-		Usage   map[string]any `json:"usage,omitempty"`
+		ID                string         `json:"id"`
+		Object            string         `json:"object"`
+		Created           int64          `json:"created"`
+		Model             string         `json:"model"`
+		SystemFingerprint string         `json:"system_fingerprint"`
+		Choices           []Choice       `json:"choices"`
+		Usage             map[string]any `json:"usage,omitempty"`
 	}
 
 	var contentPtr *string
@@ -1391,19 +1516,23 @@ func FormatOpenAINonStream(id, model, content, reasoningContent string, toolCall
 	}
 
 	res := Response{
-		ID:      id,
-		Object:  "chat.completion",
-		Created: time.Now().Unix(),
-		Model:   model,
+		ID:                id,
+		Object:            "chat.completion",
+		Created:           time.Now().Unix(),
+		Model:             model,
+		SystemFingerprint: "fp_antiapi",
 		Choices: []Choice{
 			{
 				Index: 0,
 				Message: Message{
 					Role:             "assistant",
 					Content:          contentPtr,
+					Refusal:          nil,
 					ReasoningContent: rcPtr,
 					ToolCalls:        toolCalls,
 				},
+				Logprobs:     nil,
+				Refusal:      nil,
 				FinishReason: finishReason,
 			},
 		},
@@ -1432,13 +1561,14 @@ func FormatOpenAINonStream(id, model, content, reasoningContent string, toolCall
 }
 
 // FormatClaudeNonStream formats response for Anthropic clients
-func FormatClaudeNonStream(id, model, content string, toolCalls []OpenAIToolCall, u *GoogleUsageMetadata) []byte {
+func FormatClaudeNonStream(id, model, content, reasoningContent string, toolCalls []OpenAIToolCall, u *GoogleUsageMetadata) []byte {
 	type ClaudeContentBlock struct {
-		Type  string         `json:"type"`
-		Text  string         `json:"text,omitempty"`
-		ID    string         `json:"id,omitempty"`
-		Name  string         `json:"name,omitempty"`
-		Input map[string]any `json:"input,omitempty"`
+		Type     string         `json:"type"`
+		Text     string         `json:"text,omitempty"`
+		Thinking string         `json:"thinking,omitempty"`
+		ID       string         `json:"id,omitempty"`
+		Name     string         `json:"name,omitempty"`
+		Input    map[string]any `json:"input,omitempty"`
 	}
 	type Response struct {
 		ID         string               `json:"id"`
@@ -1451,6 +1581,12 @@ func FormatClaudeNonStream(id, model, content string, toolCalls []OpenAIToolCall
 	}
 
 	var blocks []ClaudeContentBlock
+	if reasoningContent != "" {
+		blocks = append(blocks, ClaudeContentBlock{
+			Type:     "thinking",
+			Thinking: reasoningContent,
+		})
+	}
 	if content != "" {
 		blocks = append(blocks, ClaudeContentBlock{Type: "text", Text: content})
 	}
@@ -1474,9 +1610,14 @@ func FormatClaudeNonStream(id, model, content string, toolCalls []OpenAIToolCall
 
 	inputTokens := 0
 	outputTokens := 0
+	cacheReadTokens := 0
 	if u != nil {
 		inputTokens = u.PromptTokenCount
 		outputTokens = u.CandidatesTokenCount + u.ThoughtsTokenCount
+		if outputTokens == 0 && u.TotalTokenCount > u.PromptTokenCount {
+			outputTokens = u.TotalTokenCount - u.PromptTokenCount
+		}
+		cacheReadTokens = u.CachedContentTokenCount
 	}
 
 	res := Response{
@@ -1487,8 +1628,10 @@ func FormatClaudeNonStream(id, model, content string, toolCalls []OpenAIToolCall
 		Model:      model,
 		StopReason: stopReason,
 		Usage: map[string]int{
-			"input_tokens":  inputTokens,
-			"output_tokens": outputTokens,
+			"input_tokens":                inputTokens,
+			"output_tokens":               outputTokens,
+			"cache_read_input_tokens":     cacheReadTokens,
+			"cache_creation_input_tokens": 0,
 		},
 	}
 

@@ -85,3 +85,30 @@ func TestCuratedModelsContextLimits(t *testing.T) {
 		}
 	}
 }
+
+func TestGetModel(t *testing.T) {
+	reg := GetRegistry()
+
+	m, ok := reg.GetModel("gemini-3.8-flash")
+	if !ok {
+		t.Fatalf("expected GetModel(gemini-3.8-flash) to succeed")
+	}
+	if m.ID != "gemini-3.8-flash" {
+		t.Errorf("expected ID 'gemini-3.8-flash', got %q", m.ID)
+	}
+
+	// Alias check
+	mHigh, ok := reg.GetModel("gemini-3.8-flash-high")
+	if !ok {
+		t.Fatalf("expected GetModel(gemini-3.8-flash-high) to succeed")
+	}
+	if mHigh.ID != "gemini-3.8-flash" {
+		t.Errorf("expected ID 'gemini-3.8-flash', got %q", mHigh.ID)
+	}
+
+	// Unknown model
+	_, ok = reg.GetModel("nonexistent-model")
+	if ok {
+		t.Errorf("expected GetModel(nonexistent-model) to return false")
+	}
+}

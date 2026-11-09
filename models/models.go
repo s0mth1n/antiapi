@@ -203,3 +203,35 @@ func (r *Registry) GetAllModels() []ModelInfo {
 	}
 	return result
 }
+
+// GetModel returns information for a specific model ID or alias
+func (r *Registry) GetModel(id string) (ModelInfo, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	cleaned := strings.TrimSpace(strings.ToLower(id))
+	if cleaned == "" {
+		return ModelInfo{}, false
+	}
+
+	for _, cur := range CuratedSupportedModels {
+		if strings.EqualFold(cur.ID, cleaned) {
+			if m, ok := r.models[cur.ID]; ok {
+				return m, true
+			}
+			return cur, true
+		}
+	}
+
+	if m, ok := r.models[cleaned]; ok {
+		return m, true
+	}
+
+	if cleaned == "gemini-3.8-flash-high" {
+		if m, ok := r.models["gemini-3.8-flash"]; ok {
+			return m, true
+		}
+	}
+
+	return ModelInfo{}, false
+}

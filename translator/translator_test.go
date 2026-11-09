@@ -238,7 +238,7 @@ func TestFormatClaudeNonStreamToolCalls(t *testing.T) {
 		},
 	}
 
-	respBytes := FormatClaudeNonStream("msg-123", "claude-3-7-sonnet", "", toolCalls, nil)
+	respBytes := FormatClaudeNonStream("msg-123", "claude-3-7-sonnet", "", "", toolCalls, nil)
 
 	var resp map[string]any
 	if err := json.Unmarshal(respBytes, &resp); err != nil {
@@ -593,7 +593,7 @@ func TestFormatClaudeNonStreamWithUsage(t *testing.T) {
 		CandidatesTokenCount: 25,
 		TotalTokenCount:      75,
 	}
-	respBytes := FormatClaudeNonStream("msg-1", "claude-sonnet-4-6", "Claude text", nil, u)
+	respBytes := FormatClaudeNonStream("msg-1", "claude-sonnet-4-6", "Claude text", "", nil, u)
 	var resp struct {
 		Usage struct {
 			InputTokens  int `json:"input_tokens"`
@@ -941,5 +941,229 @@ func TestReasoningObjectUnpacking(t *testing.T) {
 	tc, ok := gReq.Request.GenerationConfig["thinkingConfig"].(map[string]any)
 	if !ok || tc["includeThoughts"] != true || tc["thinkingBudget"] != 8192 {
 		t.Errorf("expected includeThoughts:true and thinkingBudget:8192, got %v", tc)
+	}
+}
+
+func TestOpenAIStopSequences(t *testing.T) {
+	// String stop
+	reqStr := &OpenAIChatRequest{
+		Model:    "gemini-3.8-flash",
+		Messages: []OpenAIMessage{{Role: "user", Content: "hi"}},
+		Stop:     "\n\n",
+	}
+	gReqStr, _ := ConvertOpenAIToGoogle(reqStr)
+	stops, ok := gReqStr.Request.GenerationConfig["stopSequences"].([]string)
+	if !ok || len(stops) != 1 || stops[0] != "\n\n" {
+		t.Errorf("expected stopSequences [\n\n], got %v", gReqStr.Request.GenerationConfig["stopSequences"])
+	}
+
+	// Slice stop
+	reqSlice := &OpenAIChatRequest{
+		Model:    "gemini-3.8-flash",
+		Messages: []OpenAIMessage{{Role: "user", Content: "hi"}},
+		Stop:     []any{"END", "STOP"},
+	}
+	gReqSlice, _ := ConvertOpenAIToGoogle(reqSlice)
+	stopsSlice, ok := gReqSlice.Request.GenerationConfig["stopSequences"].([]string)
+	if !ok || len(stopsSlice) != 2 || stopsSlice[0] != "END" || stopsSlice[1] != "STOP" {
+		t.Errorf("expected stopSequences [END, STOP], got %v", gReqSlice.Request.GenerationConfig["stopSequences"])
+	}
+}
+
+func TestOpenAIResponseFormat(t *testing.T) {
+	// json_object
+	reqObj := &OpenAIChatRequest{
+		Model:          "gemini-3.8-flash",
+		Messages:       []OpenAIMessage{{Role: "user", Content: "hi"}},
+		ResponseFormat: map[string]any{"type": "json_object"},
+	}
+	gReqObj, _ := ConvertOpenAIToGoogle(reqObj)
+	if mime := gReqObj.Request.GenerationConfig["responseMimeType"]; mime != "application/json" {
+		t.Errorf("expected responseMimeType application/json, got %v", mime)
+	}
+
+	// json_schema
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"city": map[string]any{"type": "string"},
+		},
+	}
+	reqSchema := &OpenAIChatRequest{
+		Model:    "gemini-3.8-flash",
+		Messages: []OpenAIMessage{{Role: "user", Content: "hi"}},
+		ResponseFormat: map[string]any{
+			"type": "json_schema",
+			"json_schema": map[string]any{
+				"schema": schema,
+			},
+		},
+	}
+	gReqSchema, _ := ConvertOpenAIToGoogle(reqSchema)
+	if mime := gReqSchema.Request.GenerationConfig["responseMimeType"]; mime != "application/json" {
+		t.Errorf("expected responseMimeType application/json, got %v", mime)
+	}
+	if gReqSchema.Request.GenerationConfig["responseSchema"] == nil {
+		t.Errorf("expected responseSchema to be set")
+	}
+}
+
+func TestOpenAIToolChoice(t *testing.T) {
+	cases := []struct {
+		name         string
+		toolChoice   any
+		expectedMode string
+		allowedFns   []string
+	}{
+		{"none", "none", "NONE", nil},
+		{"auto", "auto", "AUTO", nil},
+		{"required", "required", "ANY", nil},
+		{"named_function", map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name": "lookup_stock",
+			},
+		}, "ANY", []string{"lookup_stock"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := &OpenAIChatRequest{
+				Model:      "gemini-3.8-flash",
+				Messages:   []OpenAIMessage{{Role: "user", Content: "hi"}},
+				ToolChoice: tc.toolChoice,
+			}
+			gReq, _ := ConvertOpenAIToGoogle(req)
+			tcMap, ok := gReq.Request.ToolConfig.(map[string]any)
+			if !ok {
+				t.Fatalf("expected ToolConfig map, got %v", gReq.Request.ToolConfig)
+			}
+			fcc, ok := tcMap["functionCallingConfig"].(map[string]any)
+			if !ok {
+				t.Fatalf("expected functionCallingConfig map, got %v", tcMap)
+			}
+			if fcc["mode"] != tc.expectedMode {
+				t.Errorf("expected mode %s, got %v", tc.expectedMode, fcc["mode"])
+			}
+			if len(tc.allowedFns) > 0 {
+				fns, ok := fcc["allowedFunctionNames"].([]string)
+				if !ok || len(fns) != len(tc.allowedFns) || fns[0] != tc.allowedFns[0] {
+					t.Errorf("expected allowedFunctionNames %v, got %v", tc.allowedFns, fcc["allowedFunctionNames"])
+				}
+			}
+		})
+	}
+}
+
+func TestClaudeStopSequencesAndToolChoice(t *testing.T) {
+	req := &ClaudeRequest{
+		Model:         "claude-3-7-sonnet",
+		Messages:      []ClaudeMessage{{Role: "user", Content: "hi"}},
+		StopSequences: []string{"Human:", "Assistant:"},
+		ToolChoice: map[string]any{
+			"type": "tool",
+			"name": "get_weather",
+		},
+	}
+	gReq, _ := ConvertClaudeToGoogle(req)
+	stops, ok := gReq.Request.GenerationConfig["stopSequences"].([]string)
+	if !ok || len(stops) != 2 || stops[0] != "Human:" || stops[1] != "Assistant:" {
+		t.Errorf("expected stopSequences, got %v", gReq.Request.GenerationConfig["stopSequences"])
+	}
+
+	tcMap, ok := gReq.Request.ToolConfig.(map[string]any)
+	if !ok {
+		t.Fatalf("expected ToolConfig map, got %v", gReq.Request.ToolConfig)
+	}
+	fcc, ok := tcMap["functionCallingConfig"].(map[string]any)
+	if !ok || fcc["mode"] != "ANY" {
+		t.Errorf("expected mode ANY, got %v", fcc)
+	}
+	fns, ok := fcc["allowedFunctionNames"].([]string)
+	if !ok || len(fns) != 1 || fns[0] != "get_weather" {
+		t.Errorf("expected allowedFunctionNames [get_weather], got %v", fcc["allowedFunctionNames"])
+	}
+}
+
+func TestOpenAITelemetry(t *testing.T) {
+	// Non-streaming response telemetry
+	respBytes := FormatOpenAINonStream("cmpl-123", "gemini-3.8-flash", "hello", "reasoning steps", nil, nil)
+	var resp map[string]any
+	if err := json.Unmarshal(respBytes, &resp); err != nil {
+		t.Fatalf("failed to unmarshal non-stream response: %v", err)
+	}
+
+	if fp, ok := resp["system_fingerprint"].(string); !ok || fp != "fp_antiapi" {
+		t.Errorf("expected system_fingerprint 'fp_antiapi', got %v", resp["system_fingerprint"])
+	}
+
+	choices, ok := resp["choices"].([]any)
+	if !ok || len(choices) == 0 {
+		t.Fatalf("expected choices array")
+	}
+	choice0, ok := choices[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected choice map")
+	}
+	if lp, exists := choice0["logprobs"]; !exists || lp != nil {
+		t.Errorf("expected logprobs null, got %v", lp)
+	}
+	if ref, exists := choice0["refusal"]; !exists || ref != nil {
+		t.Errorf("expected refusal null in choice, got %v", ref)
+	}
+
+	// Streaming chunk telemetry
+	chunkStr := FormatOpenAIChunk("cmpl-123", "gemini-3.8-flash", "delta text", "", "", nil)
+	if !strings.Contains(chunkStr, `"system_fingerprint":"fp_antiapi"`) {
+		t.Errorf("expected streaming chunk to contain system_fingerprint 'fp_antiapi', got %s", chunkStr)
+	}
+}
+
+func TestClaudeThinkingAndCacheTokens(t *testing.T) {
+	u := &GoogleUsageMetadata{
+		PromptTokenCount:        100,
+		CandidatesTokenCount:    40,
+		ThoughtsTokenCount:      20,
+		TotalTokenCount:         160,
+		CachedContentTokenCount: 80,
+	}
+
+	respBytes := FormatClaudeNonStream("msg-456", "claude-3-7-sonnet", "final answer", "detailed thinking", nil, u)
+	var resp struct {
+		Content []struct {
+			Type     string `json:"type"`
+			Text     string `json:"text,omitempty"`
+			Thinking string `json:"thinking,omitempty"`
+		} `json:"content"`
+		Usage struct {
+			InputTokens              int `json:"input_tokens"`
+			OutputTokens             int `json:"output_tokens"`
+			CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+			CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+		} `json:"usage"`
+	}
+
+	if err := json.Unmarshal(respBytes, &resp); err != nil {
+		t.Fatalf("failed to unmarshal Claude response: %v", err)
+	}
+
+	if len(resp.Content) != 2 {
+		t.Fatalf("expected 2 content blocks (thinking + text), got %d", len(resp.Content))
+	}
+	if resp.Content[0].Type != "thinking" || resp.Content[0].Thinking != "detailed thinking" {
+		t.Errorf("expected block 0 to be thinking with 'detailed thinking', got %+v", resp.Content[0])
+	}
+	if resp.Content[1].Type != "text" || resp.Content[1].Text != "final answer" {
+		t.Errorf("expected block 1 to be text with 'final answer', got %+v", resp.Content[1])
+	}
+
+	if resp.Usage.CacheReadInputTokens != 80 {
+		t.Errorf("expected cache_read_input_tokens 80, got %d", resp.Usage.CacheReadInputTokens)
+	}
+	if resp.Usage.CacheCreationInputTokens != 0 {
+		t.Errorf("expected cache_creation_input_tokens 0, got %d", resp.Usage.CacheCreationInputTokens)
+	}
+	if resp.Usage.OutputTokens != 60 { // 40 candidates + 20 thoughts
+		t.Errorf("expected output_tokens 60, got %d", resp.Usage.OutputTokens)
 	}
 }

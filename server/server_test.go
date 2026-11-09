@@ -120,6 +120,67 @@ func TestModelsEndpoint(t *testing.T) {
 	}
 }
 
+func TestSingleModelEndpoint(t *testing.T) {
+	srv := NewServer()
+
+	// Test GET /v1/models/gemini-3.8-flash
+	req := httptest.NewRequest(http.MethodGet, "/v1/models/gemini-3.8-flash", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var modelItem struct {
+		ID            string `json:"id"`
+		Object        string `json:"object"`
+		OwnedBy       string `json:"owned_by"`
+		ContextWindow int    `json:"context_window"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &modelItem); err != nil {
+		t.Fatalf("failed to unmarshal model item: %v", err)
+	}
+	if modelItem.ID != "gemini-3.8-flash" {
+		t.Errorf("expected ID 'gemini-3.8-flash', got %q", modelItem.ID)
+	}
+	if modelItem.Object != "model" {
+		t.Errorf("expected object 'model', got %q", modelItem.Object)
+	}
+	if modelItem.ContextWindow != 1048576 {
+		t.Errorf("expected context_window 1048576, got %d", modelItem.ContextWindow)
+	}
+}
+
+func TestSingleModelNotFound(t *testing.T) {
+	srv := NewServer()
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/models/nonexistent-model-xyz", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d", w.Code)
+	}
+
+	var errResp struct {
+		Error struct {
+			Message string `json:"message"`
+			Type    string `json:"type"`
+			Code    string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &errResp); err != nil {
+		t.Fatalf("failed to unmarshal error response: %v", err)
+	}
+	if errResp.Error.Code != "model_not_found" {
+		t.Errorf("expected error code 'model_not_found', got %q", errResp.Error.Code)
+	}
+	if errResp.Error.Type != "invalid_request_error" {
+		t.Errorf("expected error type 'invalid_request_error', got %q", errResp.Error.Type)
+	}
+}
+
 func TestIsFastModeRequest(t *testing.T) {
 	tests := []struct {
 		name     string

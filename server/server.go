@@ -86,6 +86,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/v1/chat/completions", s.cors(s.handleChatCompletions))
 	s.mux.HandleFunc("/v1/messages", s.cors(s.handleMessages))
 	s.mux.HandleFunc("/v1/models", s.cors(s.handleModels))
+	s.mux.HandleFunc("/v1/models/", s.cors(s.handleModels))
 	s.mux.HandleFunc("/api/status", s.cors(s.handleStatus))
 	s.mux.HandleFunc("/api/accounts", s.cors(s.handleAccounts))
 	s.mux.HandleFunc("/api/accounts/add", s.cors(s.handleAddAccount))
@@ -465,6 +466,40 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		Pricing         *models.ModelPricing `json:"pricing,omitempty"`
 	}
 
+	trimmed := strings.TrimPrefix(r.URL.Path, "/v1/models")
+	trimmed = strings.TrimPrefix(trimmed, "/")
+	trimmed = strings.TrimSpace(trimmed)
+
+	if trimmed != "" {
+		m, ok := reg.GetModel(trimmed)
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]any{
+				"error": map[string]any{
+					"message": "Model not found",
+					"type":    "invalid_request_error",
+					"code":    "model_not_found",
+				},
+			})
+			return
+		}
+		item := ModelItem{
+			ID:              m.ID,
+			Name:            m.Name,
+			DisplayName:     m.Name,
+			Object:          "model",
+			Created:         time.Now().Unix(),
+			OwnedBy:         "antigravity",
+			ContextWindow:   m.ContextWindow,
+			MaxOutputTokens: m.MaxOutputTokens,
+			ContextLength:   m.ContextWindow,
+			MaxTokens:       m.MaxOutputTokens,
+			Pricing:         m.Pricing,
+		}
+		json.NewEncoder(w).Encode(item)
+		return
+	}
+
 	items := []ModelItem{}
 	for _, m := range reg.GetAllModels() {
 		items = append(items, ModelItem{
@@ -711,6 +746,7 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "event: message_start\ndata: %s\n\n", msBytes)
 		flusher.Flush()
 
+		thinkingBlockStarted := false
 		textBlockStarted := false
 		blockIndex := 0
 		stopReason := "end_turn"
@@ -729,7 +765,22 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 				lastUsage = parsed.Usage
 			}
 
+			if parsed.ReasoningText != "" {
+				if !thinkingBlockStarted {
+					fmt.Fprintf(w, "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":%d,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\"}}\n\n", blockIndex)
+					thinkingBlockStarted = true
+				}
+				escThinking, _ := json.Marshal(parsed.ReasoningText)
+				fmt.Fprintf(w, "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":%d,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":%s}}\n\n", blockIndex, escThinking)
+				flusher.Flush()
+			}
+
 			if parsed.Text != "" {
+				if thinkingBlockStarted {
+					fmt.Fprintf(w, "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":%d}\n\n", blockIndex)
+					blockIndex++
+					thinkingBlockStarted = false
+				}
 				if !textBlockStarted {
 					fmt.Fprintf(w, "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":%d,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n", blockIndex)
 					textBlockStarted = true
@@ -742,6 +793,11 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 
 			if len(parsed.ToolCalls) > 0 {
 				stopReason = "tool_use"
+				if thinkingBlockStarted {
+					fmt.Fprintf(w, "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":%d}\n\n", blockIndex)
+					blockIndex++
+					thinkingBlockStarted = false
+				}
 				if textBlockStarted {
 					fmt.Fprintf(w, "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":%d}\n\n", blockIndex)
 					blockIndex++
@@ -780,16 +836,21 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		if thinkingBlockStarted {
+			fmt.Fprintf(w, "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":%d}\n\n", blockIndex)
+		}
 		if textBlockStarted {
 			fmt.Fprintf(w, "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":%d}\n\n", blockIndex)
 		}
 
 		outputTokens := 10
+		cacheReadTokens := 0
 		if lastUsage != nil {
 			outputTokens = lastUsage.CandidatesTokenCount + lastUsage.ThoughtsTokenCount
 			if outputTokens == 0 && lastUsage.TotalTokenCount > lastUsage.PromptTokenCount {
 				outputTokens = lastUsage.TotalTokenCount - lastUsage.PromptTokenCount
 			}
+			cacheReadTokens = lastUsage.CachedContentTokenCount
 		}
 
 		msgDelta := map[string]any{
@@ -798,7 +859,11 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 				"stop_reason":   stopReason,
 				"stop_sequence": nil,
 			},
-			"usage": map[string]int{"output_tokens": outputTokens},
+			"usage": map[string]int{
+				"output_tokens":               outputTokens,
+				"cache_read_input_tokens":     cacheReadTokens,
+				"cache_creation_input_tokens": 0,
+			},
 		}
 		mdBytes, _ := json.Marshal(msgDelta)
 		fmt.Fprintf(w, "event: message_delta\ndata: %s\n\n", mdBytes)
@@ -809,6 +874,7 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var fullText strings.Builder
+	var fullReasoning strings.Builder
 	var allToolCalls []translator.OpenAIToolCall
 	var lastUsage *translator.GoogleUsageMetadata
 	for event := range eventCh {
@@ -820,13 +886,14 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 			lastUsage = parsed.Usage
 		}
 		fullText.WriteString(parsed.Text)
+		fullReasoning.WriteString(parsed.ReasoningText)
 		if len(parsed.ToolCalls) > 0 {
 			allToolCalls = append(allToolCalls, parsed.ToolCalls...)
 		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(translator.FormatClaudeNonStream(msgID, resolvedModel, fullText.String(), allToolCalls, lastUsage))
+	w.Write(translator.FormatClaudeNonStream(msgID, resolvedModel, fullText.String(), fullReasoning.String(), allToolCalls, lastUsage))
 }
 
 func (s *Server) handleReorderAccounts(w http.ResponseWriter, r *http.Request) {
