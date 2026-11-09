@@ -20,11 +20,8 @@ Runs natively on **macOS (Apple Silicon M1/M2/M3/M4 & Intel x86_64)** and **Linu
   - Environment: `ANTIGRAVITY_REFRESH_TOKEN`
 - **Pre-Warmed HTTP/2 Pipeline**: Reusable multiplexed H2 transport directly into Google Cloud Code PA with sub-millisecond TLS reuse.
 - **High-Throughput SSE Streaming**: Pooled byte buffers with zero heap reallocation during token streaming.
-- **Supported Models**:
-  - `gemini-3.8-flash` (Canonical unified model with dynamic reasoning effort: minimal, low, med, high, xhigh, max, ultra)
-  - `claude-sonnet-4-6` (Claude Sonnet 4.6 with Thinking)
-  - `claude-opus-4-6-thinking` (Claude Opus 4.6 with Thinking)
-  - `gpt-oss-120b-medium`
+- **Supported Model**: `gemini-3.8-flash` — one canonical model with dynamic reasoning effort (`minimal`, `low`, `med`, `high`, `xhigh`, `max`, `ultra` via `reasoning_effort` or the `-low` / `-medium` / `-high` suffixes).
+  - Any other model name a client sends (e.g. `claude-sonnet-4-6`) is accepted and routed to `gemini-3.8-flash-high`, so OpenAI/Anthropic clients work without reconfiguration.
 - **Built-in Web Dashboard**: Dark-mode UI with live quota gauges, prompt playground, and 1-click client configuration snippets.
 - **Instant Cloudflare Tunnel**: Pass `--tunnel` for a zero-configuration public HTTPS URL to access your gateway remotely.
 

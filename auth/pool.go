@@ -351,6 +351,20 @@ func (p *AccountPool) Load() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	// 0. Environment variable takes top priority so headless/docker runs need
+	// no files at all (README documents this as Method B).
+	if envToken := strings.TrimSpace(os.Getenv("ANTIGRAVITY_REFRESH_TOKEN")); envToken != "" {
+		p.accounts = append(p.accounts, &Account{
+			ID:           "env-account",
+			Email:        "env-user",
+			RefreshToken: envToken,
+			ProjectID:    DefaultProject,
+			Quotas:       make(map[string]float64),
+		})
+		log.Printf("[Pool] Loaded account from ANTIGRAVITY_REFRESH_TOKEN")
+		return
+	}
+
 	// 1. Try ~/.antigravity-api/accounts.json
 	if data, err := os.ReadFile(p.storagePath); err == nil {
 		type FileFormat struct {
