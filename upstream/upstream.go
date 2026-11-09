@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,19 +14,70 @@ import (
 	"net/http"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"antiapi/auth"
 	"antiapi/translator"
+	"antiapi/transport"
 	"antiapi/tui"
 )
 
 const (
-	DailyEndpoint    = "https://daily-cloudcode-pa.googleapis.com"
 	StandardEndpoint = "https://cloudcode-pa.googleapis.com"
+	DailyEndpoint    = "https://daily-cloudcode-pa.googleapis.com"
 	StreamPath       = "/v1internal:streamGenerateContent?alt=sse"
 	RequestTimeout   = 120 * time.Second
 )
+
+var (
+	endpointCooldownMu sync.RWMutex
+	endpointCooldowns  = make(map[string]time.Time)
+
+	endpointAffinityMu sync.RWMutex
+	preferredEndpoint  = make(map[string]string)
+)
+
+func getPreferredEndpoint(email string) string {
+	endpointAffinityMu.RLock()
+	defer endpointAffinityMu.RUnlock()
+	return preferredEndpoint[email]
+}
+
+func setPreferredEndpoint(email, endpoint string) {
+	endpointAffinityMu.Lock()
+	defer endpointAffinityMu.Unlock()
+	preferredEndpoint[email] = endpoint
+}
+
+func isEndpointInCooldown(endpoint string) bool {
+	endpointCooldownMu.RLock()
+	defer endpointCooldownMu.RUnlock()
+	expiry, exists := endpointCooldowns[endpoint]
+	if !exists {
+		return false
+	}
+	return time.Now().Before(expiry)
+}
+
+func markEndpointCooldown(endpoint string, duration time.Duration) {
+	endpointCooldownMu.Lock()
+	defer endpointCooldownMu.Unlock()
+	endpointCooldowns[endpoint] = time.Now().Add(duration)
+}
+
+func clearEndpointCooldown(endpoint string) {
+	endpointCooldownMu.Lock()
+	defer endpointCooldownMu.Unlock()
+	delete(endpointCooldowns, endpoint)
+}
+
+// ClearAllEndpointCooldowns flushes all active endpoint backoffs.
+func ClearAllEndpointCooldowns() {
+	endpointCooldownMu.Lock()
+	defer endpointCooldownMu.Unlock()
+	endpointCooldowns = make(map[string]time.Time)
+}
 
 type SSEEvent struct {
 	Data []byte
@@ -50,6 +103,14 @@ func getCapacityFallbackModel(model string) string {
 		return "gemini-3.8-flash-medium"
 	case "gemini-3.8-flash-medium":
 		return "gemini-3.8-flash-low"
+	case "gemini-3.7-flash-high":
+		return "gemini-3.7-flash-medium"
+	case "gemini-3.7-flash-medium":
+		return "gemini-3.8-flash-high"
+	case "gemini-3.1-pro-high", "gemini-pro-agent":
+		return "gemini-3.8-flash-high"
+	case "claude-opus-4-6-thinking":
+		return "claude-sonnet-4-6"
 	default:
 		return ""
 	}
@@ -75,9 +136,42 @@ func setModelName(payload any, model string) {
 	}
 }
 
-func (c *Client) StreamGenerate(ctx context.Context, payload any) (<-chan SSEEvent, error) {
+func deriveConversationKey(payload any) string {
+	if gReq, ok := payload.(*translator.GoogleRequest); ok {
+		if len(gReq.Request.Contents) > 1 {
+			first := gReq.Request.Contents[0]
+			var b strings.Builder
+			b.WriteString(first.Role)
+			for _, p := range first.Parts {
+				if p.Text != "" {
+					b.WriteString(p.Text)
+				}
+			}
+			h := sha256.Sum256([]byte(b.String()))
+			return hex.EncodeToString(h[:8])
+		}
+	} else if reqMap, ok := payload.(map[string]any); ok {
+		if reqObj, ok := reqMap["request"].(map[string]any); ok {
+			if contents, ok := reqObj["contents"].([]any); ok && len(contents) > 1 {
+				firstBytes, _ := json.Marshal(contents[0])
+				h := sha256.Sum256(firstBytes)
+				return hex.EncodeToString(h[:8])
+			}
+		}
+	}
+	return ""
+}
+
+func (c *Client) StreamGenerate(ctx context.Context, payload any, sessionID ...string) (<-chan SSEEvent, error) {
 	currentModel := extractModelName(payload)
 	triedFallback := false
+
+	var sessKey string
+	if len(sessionID) > 0 && sessionID[0] != "" {
+		sessKey = sessionID[0]
+	} else {
+		sessKey = deriveConversationKey(payload)
+	}
 
 attempt:
 	pool := auth.GetPool()
@@ -97,7 +191,7 @@ attempt:
 			return nil, ctx.Err()
 		}
 
-		acc, err := pool.NextAvailableAccount(attemptedAccounts)
+		acc, err := pool.GetAccountForSession(sessKey, attemptedAccounts)
 		if err != nil {
 			return nil, fmt.Errorf("cannot select account: %w", err)
 		}
@@ -145,7 +239,13 @@ attempt:
 		ua := BuildUserAgent()
 		clientVersion := fmt.Sprintf("antigravity-ide/2.9.1 gl-go/%s", runtime.Version())
 
-		endpoints := []string{DailyEndpoint, StandardEndpoint}
+		endpoints := []string{StandardEndpoint, DailyEndpoint}
+		pref := getPreferredEndpoint(acc.Email)
+		if pref == DailyEndpoint && !isEndpointInCooldown(DailyEndpoint) {
+			endpoints = []string{DailyEndpoint, StandardEndpoint}
+		} else if isEndpointInCooldown(StandardEndpoint) && !isEndpointInCooldown(DailyEndpoint) {
+			endpoints = []string{DailyEndpoint, StandardEndpoint}
+		}
 		saw429 := false
 		for _, base := range endpoints {
 			url := base + StreamPath
@@ -162,7 +262,8 @@ attempt:
 			req.Header.Set("Accept", "text/event-stream")
 			req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 
-			resp, err := c.httpClient.Do(req)
+			accountClient := transport.NewAccountClient(acc.Email, RequestTimeout)
+			resp, err := accountClient.Do(req)
 			if err != nil {
 				if ctx.Err() != nil {
 					acc.Release()
@@ -173,6 +274,8 @@ attempt:
 			}
 
 			if resp.StatusCode == http.StatusOK {
+				clearEndpointCooldown(base)
+				setPreferredEndpoint(acc.Email, base)
 				acc.RecordSuccess()
 				log.Printf("[Upstream] 200 OK via %s on account %s (Stealth TLS + %s)", base, acc.Email, ua)
 				eventCh := make(chan SSEEvent, 64)
@@ -196,7 +299,8 @@ attempt:
 
 			if resp.StatusCode == http.StatusTooManyRequests {
 				saw429 = true
-				log.Printf("[Upstream] 429 Quota Exceeded on %s via %s: %s", acc.Email, base, string(body))
+				markEndpointCooldown(base, 10*time.Minute)
+				log.Printf("[Upstream] 429 Quota Exceeded on %s via %s (placed on 10m cooldown): %s", acc.Email, base, string(body))
 				lastErr = fmt.Errorf("quota exceeded on %s: %s", acc.Email, string(body))
 				continue // try next endpoint before failing over account
 			}
@@ -263,7 +367,7 @@ func (c *Client) streamReader(ctx context.Context, body io.ReadCloser, ch chan<-
 	defer body.Close()
 	defer close(ch)
 
-	reader := bufio.NewReaderSize(body, 64*1024)
+	reader := bufio.NewReaderSize(body, 4*1024)
 
 	for {
 		select {

@@ -6,12 +6,12 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 	"unicode/utf8"
-	"unsafe"
 
 	"antiapi/auth"
+	"antiapi/translator"
+	"antiapi/tunnel"
 )
 
 // ANSI color and style tokens
@@ -51,18 +51,26 @@ type TUI struct {
 	tunnelURL         string
 	lastRenderedLines int
 	isInitialized     bool
+	oldTermState      *termState
 	stopCh            chan struct{}
 }
 
 var (
-	globalTUI *TUI
-	globalMu  sync.RWMutex
+	globalTUI        *TUI
+	globalMu         sync.RWMutex
+	quotaRefreshHook func()
+	quotaRefreshMu   sync.RWMutex
 )
 
+// SetQuotaRefreshHook configures the callback executed when user presses 'r' in TUI.
+func SetQuotaRefreshHook(hook func()) {
+	quotaRefreshMu.Lock()
+	defer quotaRefreshMu.Unlock()
+	quotaRefreshHook = hook
+}
+
 func IsTerminal(fd uintptr) bool {
-	var termios syscall.Termios
-	_, _, err := syscall.Syscall(syscall.SYS_IOCTL, fd, uintptr(syscall.TCGETS), uintptr(unsafe.Pointer(&termios)))
-	return err == 0
+	return isTerminal(fd)
 }
 
 func Init(port int, mp MetricsProvider) *TUI {
@@ -109,6 +117,14 @@ func (t *TUI) Start() {
 	// Hide cursor during in-place rendering
 	os.Stdout.WriteString("\033[?25l")
 
+	// Enable cbreak mode on stdin if interactive terminal to handle keyboard shortcuts without disabling output processing
+	if IsTerminal(os.Stdin.Fd()) {
+		if state, err := enableCBreak(os.Stdin.Fd()); err == nil {
+			t.oldTermState = state
+			go t.readInputLoop()
+		}
+	}
+
 	// Initial render
 	t.Render()
 
@@ -133,8 +149,103 @@ func (t *TUI) Stop() {
 	default:
 		close(t.stopCh)
 	}
+
+	if t.oldTermState != nil {
+		_ = restoreTerminal(os.Stdin.Fd(), t.oldTermState)
+		t.oldTermState = nil
+	}
+
 	// Restore cursor and move cleanly past the card
-	os.Stdout.WriteString("\n\033[?25h\n")
+	os.Stdout.WriteString("\r\n\033[?25h\r\n")
+}
+
+func (t *TUI) readInputLoop() {
+	buf := make([]byte, 16)
+	for {
+		select {
+		case <-t.stopCh:
+			return
+		default:
+		}
+
+		n, err := os.Stdin.Read(buf)
+		if err != nil || n == 0 {
+			return
+		}
+
+		for i := 0; i < n; i++ {
+			b := buf[i]
+			switch b {
+			case 'f', 'F':
+				current := translator.IsGlobalFastMode()
+				newMode := !current
+				translator.SetGlobalFastMode(newMode)
+				t.mu.Lock()
+				if newMode {
+					t.lastActivity = "⚡ Fast mode ENABLED (zero-thinking)"
+				} else {
+					t.lastActivity = "Fast mode DISABLED (standard)"
+				}
+				t.mu.Unlock()
+				t.Render()
+			case 'r', 'R':
+				t.mu.Lock()
+				t.lastActivity = "Refreshing quotas, models and rate-limits..."
+				t.mu.Unlock()
+				t.Render()
+				go func() {
+					quotaRefreshMu.RLock()
+					hook := quotaRefreshHook
+					quotaRefreshMu.RUnlock()
+					if hook != nil {
+						hook()
+					} else {
+						for _, a := range auth.GetPool().GetAllAccounts() {
+							_, _ = a.Refresh()
+							_, _ = a.FetchQuotaSummary()
+						}
+					}
+					t.mu.Lock()
+					t.lastActivity = "Quotas, models & rate-limits refreshed"
+					t.mu.Unlock()
+					t.Render()
+				}()
+			case 't', 'T':
+				mgr := tunnel.GetManager()
+				if mgr.IsActive() {
+					mgr.Stop()
+					t.mu.Lock()
+					t.tunnelURL = ""
+					t.lastActivity = "Cloudflare tunnel stopped"
+					t.mu.Unlock()
+					t.Render()
+				} else {
+					t.mu.Lock()
+					t.lastActivity = "Starting Cloudflare tunnel..."
+					t.mu.Unlock()
+					t.Render()
+					go func() {
+						url, err := mgr.Start()
+						t.mu.Lock()
+						if err != nil {
+							t.lastActivity = fmt.Sprintf("Tunnel error: %v", err)
+						} else {
+							t.tunnelURL = url
+							t.lastActivity = fmt.Sprintf("⚡ Tunnel active: %s", url)
+						}
+						t.mu.Unlock()
+						t.Render()
+					}()
+				}
+			case 'q', 'Q', 3: // 3 is Ctrl+C
+				t.Stop()
+				if p, err := os.FindProcess(os.Getpid()); err == nil {
+					_ = p.Signal(os.Interrupt)
+				}
+				return
+			}
+		}
+	}
 }
 
 func (t *TUI) Render() {
@@ -162,6 +273,9 @@ func (t *TUI) Render() {
 	if t.tunnelURL != "" {
 		lines = append(lines, formatRow(fmt.Sprintf("%s➜%s  %sPublic API:%s  %s/v1",
 			Bold+HiGreen, Reset, Bold+HiWhite, Reset, t.tunnelURL), CardWidth))
+	} else {
+		lines = append(lines, formatRow(fmt.Sprintf("%s➜%s  %sPublic API:%s  %s[OFF] (Press 't' to start)%s",
+			DarkGray, Reset, Bold+HiWhite, Reset, DarkGray, Reset), CardWidth))
 	}
 
 	// 4. Empty row
@@ -196,14 +310,23 @@ func (t *TUI) Render() {
 	lines = append(lines, formatRow(fmt.Sprintf("%s●%s  %sFailover:%s   503 capacity auto-reroute enabled",
 		HiGreen, Reset, Bold+HiWhite, Reset), CardWidth))
 
-	// 7. Empty row
+	// 7. Fast Mode feature
+	if translator.IsGlobalFastMode() {
+		lines = append(lines, formatRow(fmt.Sprintf("%s⚡%s  %sFast Mode:%s  %s[ENABLED]%s (Zero-thinking / lowest latency)",
+			HiYellow, Reset, Bold+HiWhite, Reset, Bold+HiGreen, Reset), CardWidth))
+	} else {
+		lines = append(lines, formatRow(fmt.Sprintf("%s○%s  %sFast Mode:%s  %s[DISABLED]%s (Standard thinking enabled)",
+			DarkGray, Reset, Bold+HiWhite, Reset, DarkGray, Reset), CardWidth))
+	}
+
+	// 8. Empty row
 	lines = append(lines, formatRow("", CardWidth))
 
-	// 8. Live Activity
+	// 9. Live Activity
 	act := t.lastActivity
 	lines = append(lines, formatRow(fmt.Sprintf("%sActivity:%s   %s", Bold+HiWhite, Reset, act), CardWidth))
 
-	// 9. Metrics & Uptime
+	// 10. Metrics & Uptime
 	uptime := time.Since(t.startTime).Round(time.Second)
 	var total, s2xx, s4xx, s5xx uint64
 	var inFlight int64
@@ -217,7 +340,11 @@ func (t *TUI) Render() {
 		inFlight, formatDuration(uptime))
 	lines = append(lines, formatRow(metricsLine, CardWidth))
 
-	// 10. Bottom border (Visual width: 68)
+	// 11. Interactive controls hint
+	lines = append(lines, formatRow(fmt.Sprintf("%s[f]%s Fast Mode   %s[t]%s Tunnel   %s[r]%s Refresh   %s[q]%s Quit",
+		Bold+HiCyan, Reset, Bold+HiCyan, Reset, Bold+HiCyan, Reset, Bold+HiCyan, Reset), CardWidth))
+
+	// 12. Bottom border (Visual width: 68)
 	lines = append(lines, fmt.Sprintf("%s└%s┘%s",
 		HiCyan, strings.Repeat("─", CardWidth-2), Reset))
 
@@ -232,13 +359,13 @@ func (t *TUI) Render() {
 
 	totalLines := len(lines)
 	for i, line := range lines {
+		buf.WriteString("\r")
+		buf.WriteString(line)
 		if i < totalLines-1 {
-			buf.WriteString(line)
-			buf.WriteString("\033[K\n")
+			buf.WriteString("\033[K\r\n")
 		} else {
 			// Last line: clear to end of line, but DO NOT emit newline!
 			// Omitting the newline keeps the cursor on the bottom border and prevents viewport scrolling.
-			buf.WriteString(line)
 			buf.WriteString("\033[K")
 		}
 	}
@@ -247,7 +374,7 @@ func (t *TUI) Render() {
 	if t.lastRenderedLines > totalLines {
 		diff := t.lastRenderedLines - totalLines
 		for d := 0; d < diff; d++ {
-			buf.WriteString("\n\033[K")
+			buf.WriteString("\r\n\033[K")
 		}
 		fmt.Fprintf(&buf, "\033[%dA\r", diff)
 	}
@@ -380,7 +507,7 @@ func truncateVisual(s string, maxLen int) string {
 // IsInternalPoll returns true for background health checks and dashboard polling routes.
 func IsInternalPoll(path string) bool {
 	switch path {
-	case "/api/status", "/api/logs", "/health", "/quota", "/api/show", "/api/tags", "/version", "/props", "/v1/props", "/favicon.ico":
+	case "/api/status", "/api/logs", "/health", "/quota", "/api/show", "/api/tags", "/version", "/props", "/v1/props", "/favicon.ico", "/api/fast_mode", "/api/tunnel":
 		return true
 	default:
 		return strings.HasPrefix(path, "/api/logs") || strings.HasPrefix(path, "/api/status")

@@ -65,9 +65,6 @@ func GetRegistry() *Registry {
 // CuratedSupportedModels defines the clean, official models exposed via /v1/models
 var CuratedSupportedModels = []ModelInfo{
 	{ID: "gemini-3.8-flash", Name: "Gemini 3.8 Flash", Tier: "Gemini Flash", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.00000075", Completion: "0.00000375"}},
-	{ID: "gemini-3.8-flash-high", Name: "Gemini 3.8 Flash (High)", Tier: "Gemini Flash", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.00000075", Completion: "0.00000375"}},
-	{ID: "gemini-3.8-flash-medium", Name: "Gemini 3.8 Flash (Medium)", Tier: "Gemini Flash", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.0000005", Completion: "0.0000025"}},
-	{ID: "gemini-3.8-flash-low", Name: "Gemini 3.8 Flash (Low)", Tier: "Gemini Flash", ContextWindow: 1048576, MaxOutputTokens: 65536, Pricing: &ModelPricing{Prompt: "0.00000025", Completion: "0.00000125"}},
 }
 
 func (r *Registry) initDefaults() {
@@ -176,6 +173,8 @@ func (r *Registry) ResolveModel(userModel string) string {
 		"gemini-3.8-medium":       "gemini-3.8-flash-medium",
 		"gemini-3.8-flash-low":    "gemini-3.8-flash-low",
 		"gemini-3.8-low":          "gemini-3.8-flash-low",
+		"gemini-3.8-flash-fast":   "gemini-3.8-flash-low",
+		"gemini-3.8-fast":         "gemini-3.8-flash-low",
 	}
 
 	if target, ok := aliases[cleaned]; ok {

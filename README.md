@@ -1,114 +1,191 @@
-# Anti-API Gateway
+# AntiAPI Gateway
 
-A lightweight, zero-dependency, high-performance API gateway built in **Go** that exposes Google Antigravity as a standard OpenAI (`/v1/chat/completions`, `/v1/models`) and Anthropic (`/v1/messages`) compatible server.
+A lightweight, zero-dependency, high-performance API gateway written in **Go** that exposes Google Antigravity as a standard OpenAI (`/v1/chat/completions`, `/v1/models`) and Anthropic (`/v1/messages`) compatible server.
 
-Designed for NixOS and local agent workflows (Hermes, Cline, Cursor, Continue, etc.) with zero runtime dependencies.
+Runs natively on **macOS (Apple Silicon M1/M2/M3/M4 & Intel x86_64)** and **Linux (x86_64 & ARM64)** with zero runtime dependencies.
 
 ---
 
-## ✨ Features
+## Features
 
-- **Single Standalone Static Binary**: Compiled with pure Go standard library (~10MB binary, ~15MB RAM footprint).
-- **Zero-Config Auto Discovery**: Automatically locates your Antigravity refresh token from `~/.anti-api/accounts.json`, Antigravity IDE SQLite DB, or `ANTIGRAVITY_REFRESH_TOKEN`.
-- **All Antigravity Models Supported**:
+- **Native macOS & Linux Support**: Built-in Darwin and Linux terminal handling, platform-specific credential storage discovery, and cross-platform compilation.
+- **Single Standalone Static Binary**: Pure Go standard library (~10MB binary, ~15MB RAM footprint).
+- **Interactive Terminal UI (TUI)**: Live visual status displaying active accounts, rate limits, quota countdowns, and latency telemetry.
+- **Zero-Config Token Discovery**: Automatically detects refresh tokens from:
+  - macOS: `~/Library/Application Support/Antigravity/User/globalStorage/state.vscdb`
+  - macOS: `~/Library/Application Support/Code/User/globalStorage/state.vscdb`
+  - Linux: `~/.config/Antigravity/User/globalStorage/state.vscdb`
+  - Linux: `~/.config/Code/User/globalStorage/state.vscdb`
+  - Universal: `~/.anti-api/accounts.json`
+  - Environment: `ANTIGRAVITY_REFRESH_TOKEN`
+- **Pre-Warmed HTTP/2 Pipeline**: Reusable multiplexed H2 transport directly into Google Cloud Code PA with sub-millisecond TLS reuse.
+- **High-Throughput SSE Streaming**: Pooled byte buffers with zero heap reallocation during token streaming.
+- **Supported Models**:
+  - `gemini-3.8-flash` (Canonical unified model with dynamic reasoning effort: minimal, low, med, high, xhigh, max, ultra)
   - `claude-sonnet-4-6` (Claude Sonnet 4.6 with Thinking)
   - `claude-opus-4-6-thinking` (Claude Opus 4.6 with Thinking)
-  - `gemini-3.8-flash-high` & `gemini-3.7-flash-high`
-  - `gemini-3.7-flash-medium` & `gemini-3.6-flash-medium`
-  - `gemini-3.1-pro-high` & `gemini-3.1-pro-low`
   - `gpt-oss-120b-medium`
-- **Smart Model Resolution**: Never crashes with `400: No account routing configured`. Automatically maps aliases (`claude-sonnet-4.6` -> `claude-sonnet-4-6`, `gemini-3.8` -> `gemini-3.7-flash-high`) and falls back gracefully for unknown model names.
-- **True SSE Streaming**: Native HTTP chunking with instant Time-To-First-Token (TTFT).
-- **Built-in Web Dashboard**: Modern dark-mode UI with live quota progress bars, prompt playground, and 1-click configuration snippets.
+- **Built-in Web Dashboard**: Dark-mode UI with live quota gauges, prompt playground, and 1-click client configuration snippets.
+- **Instant Cloudflare Tunnel**: Pass `--tunnel` for a zero-configuration public HTTPS URL to access your gateway remotely.
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
-### 1. Launch the Server
+### 1. Prerequisites
+
+- **Go 1.22+**:
+  - macOS: `brew install go`
+  - Linux: `sudo apt install golang` or use your package manager / Nix.
+
+### 2. Run the Gateway
+
+Clone or unzip the project, open a terminal, and run:
+
 ```bash
-cd ~/antiapi
+cd antiapi
 ./start.sh
 ```
-The server will start on port **8964** by default.
 
-Web Dashboard: [http://localhost:8964/](http://localhost:8964/)
+`start.sh` automatically compiles the binary on first launch and starts the interactive TUI on port **8964**.
+
+Alternatively, run directly via Go:
+```bash
+go run .
+# Or run with a public Cloudflare HTTPS tunnel:
+go run . --tunnel
+```
+
+Web Dashboard: [http://localhost:8964](http://localhost:8964)
+
+### 3. TUI Keyboard Controls
+
+- `q` or `Ctrl+C`: Graceful shutdown
+- `r`: Force quota & model refresh
+- `l`: Reset rate-limit cooldowns
 
 ---
 
-## 🤖 Hermes Agent Integration
+## Authentication Setup
 
-To connect Hermes to Antigravity:
+AntiAPI automatically discovers your credentials if you already have Antigravity or VS Code logged in on your machine.
 
-### Option A: Configuration File (`~/.hermes/config.yaml`)
-```yaml
-openai_base_url: "http://127.0.0.1:8964/v1"
-openai_api_key: "antigravity"
-model: "claude-sonnet-4-6"  # or "gemini-3.7-flash-high"
+### If automatic discovery does not find an account:
+
+#### Method A: Web UI (Easiest)
+1. Open [http://localhost:8964](http://localhost:8964) in your browser.
+2. Click **Account Settings** or **Add Account**.
+3. Paste your Google refresh token or follow the on-screen prompt.
+
+#### Method B: Environment Variable
+Set the token in your shell before running:
+```bash
+export ANTIGRAVITY_REFRESH_TOKEN="1//04..."
+./start.sh
 ```
 
-### Option B: Environment Variables
+#### Method C: Configuration File (`~/.anti-api/accounts.json`)
+```json
+{
+  "accounts": [
+    {
+      "email": "user@example.com",
+      "refreshToken": "1//04...",
+      "projectId": "default"
+    }
+  ]
+}
+```
+
+---
+
+## Client Configurations
+
+Any client supporting OpenAI or Anthropic format works out-of-the-box. Use `http://localhost:8964/v1` as the base URL and `antigravity` as the API key.
+
+### Cursor
+
+1. Open **Cursor Settings** -> **Models**.
+2. Under **OpenAI API Key**, enter `antigravity`.
+3. Check **Override OpenAI Base URL** and enter:
+   ```text
+   http://127.0.0.1:8964/v1
+   ```
+4. Add model name: `gemini-3.8-flash` or `claude-sonnet-4-6`.
+
+### Cline (VS Code)
+
+1. Open Cline Settings.
+2. Select API Provider: **OpenAI Compatible**.
+3. Base URL: `http://127.0.0.1:8964/v1`
+4. API Key: `antigravity`
+5. Model ID: `gemini-3.8-flash`
+
+### Continue.dev (`~/.continue/config.json`)
+
+```json
+{
+  "models": [
+    {
+      "title": "Gemini 3.8 Flash (AntiAPI)",
+      "provider": "openai",
+      "model": "gemini-3.8-flash",
+      "apiBase": "http://127.0.0.1:8964/v1",
+      "apiKey": "antigravity"
+    },
+    {
+      "title": "Claude Sonnet 4.6 (AntiAPI)",
+      "provider": "openai",
+      "model": "claude-sonnet-4-6",
+      "apiBase": "http://127.0.0.1:8964/v1",
+      "apiKey": "antigravity"
+    }
+  ]
+}
+```
+
+### Hermes Agent
+
+Set the environment variables:
 ```bash
 export OPENAI_BASE_URL="http://127.0.0.1:8964/v1"
 export OPENAI_API_KEY="antigravity"
 export HERMES_MODEL="claude-sonnet-4-6"
 ```
 
-### Option C: Hermes CLI Flags
-```bash
-hermes --base-url http://127.0.0.1:8964/v1 --model claude-sonnet-4-6
+Or configure `~/.hermes/config.yaml`:
+```yaml
+openai_base_url: "http://127.0.0.1:8964/v1"
+openai_api_key: "antigravity"
+model: "claude-sonnet-4-6"
 ```
 
 ---
 
-## 📡 API Endpoints
+## Usage Examples
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/v1/chat/completions` | OpenAI compatible chat completions (streaming & non-streaming) |
-| `POST` | `/v1/messages` | Anthropic Claude compatible messages API |
-| `GET` | `/v1/models` | List all available Antigravity models |
-| `GET` | `/api/status` or `/quota` | Live quota percentages and account info |
-| `GET` | `/health` | Health check endpoint |
-| `GET` | `/` | Web dashboard & interactive playground |
-
----
-
-## 🧪 Testing Examples
-
-### 1. OpenAI Streaming Completion
+### 1. OpenAI Chat Completion (Streaming)
 ```bash
 curl -N http://localhost:8964/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "claude-sonnet-4-6",
-    "messages": [{"role": "user", "content": "Write a haiku about programming."}],
+    "messages": [{"role": "user", "content": "Explain goroutines in one sentence."}],
     "stream": true
   }'
 ```
 
-### 2. Gemini 3.8 / 3.7 Flash High
-```bash
-curl -N http://localhost:8964/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gemini-3.8-flash-high",
-    "messages": [{"role": "user", "content": "Hello world"}],
-    "stream": true
-  }'
-```
-
-### 3. Anthropic Messages API
+### 2. Anthropic Messages API
 ```bash
 curl http://localhost:8964/v1/messages \
   -H "Content-Type: application/json" \
   -d '{
     "model": "claude-sonnet-4-6",
-    "messages": [{"role": "user", "content": "Explain quantum computing in one sentence."}]
+    "messages": [{"role": "user", "content": "Hello Claude!"}]
   }'
 ```
 
-### 4. Python OpenAI Client
+### 3. Python SDK (`openai`)
 ```python
 from openai import OpenAI
 
@@ -117,25 +194,56 @@ client = OpenAI(
     api_key="antigravity"
 )
 
-response = client.chat.completions.create(
+stream = client.chat.completions.create(
     model="claude-sonnet-4-6",
-    messages=[{"role": "user", "content": "Say hello!"}],
+    messages=[{"role": "user", "content": "Write a 3-line poem about Go."}],
     stream=True
 )
 
-for chunk in response:
-    content = chunk.choices[0].delta.content
-    if content:
-        print(content, end="", flush=True)
+for chunk in stream:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="", flush=True)
 print()
 ```
 
 ---
 
-## 🛠️ Building From Source
+## CLI Flags
 
-To rebuild the binary using Nix:
+| Flag | Default | Description |
+|---|---|---|
+| `-port` | `8964` | Port number to bind |
+| `-host` | `0.0.0.0` | Host address to bind |
+| `-no-tui` | `false` | Disable TUI and print raw streaming logs |
+| `-tunnel` | `false` | Launch a Cloudflare tunnel and print the public HTTPS URL |
+
+Example:
 ```bash
-cd ~/antiapi
-nix-shell -p go --run "go build -o antiapi ."
+./antiapi -port 9000 -tunnel
+```
+
+---
+
+## Compilation
+
+Build a standalone static binary for your target platform:
+
+### macOS Apple Silicon (M1/M2/M3/M4)
+```bash
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o antiapi .
+```
+
+### macOS Intel (x86_64)
+```bash
+CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o antiapi .
+```
+
+### Linux (x86_64)
+```bash
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o antiapi .
+```
+
+### Linux (ARM64)
+```bash
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o antiapi .
 ```

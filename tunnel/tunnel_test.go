@@ -59,3 +59,28 @@ func TestStart_MissingBinary(t *testing.T) {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
+
+func TestManagerLifecycle(t *testing.T) {
+	mgr := GetManager()
+	if mgr == nil {
+		t.Fatal("expected non-nil manager")
+	}
+
+	stoppedCalled := false
+	mgr.Init(8964, nil, func() {
+		stoppedCalled = true
+	})
+
+	if mgr.IsActive() {
+		t.Errorf("expected initial IsActive() == false")
+	}
+
+	if mgr.URL() != "" {
+		t.Errorf("expected initial URL() == empty")
+	}
+
+	mgr.Stop()
+	if !stoppedCalled {
+		t.Errorf("expected onStop callback called on Stop()")
+	}
+}

@@ -180,3 +180,136 @@ func (t *Tunnel) Stop() {
 		_ = t.cmd.Process.Kill()
 	}
 }
+
+// Manager coordinates the lifecycle of background Cloudflare tunnels.
+type Manager struct {
+	mu       sync.RWMutex
+	tun      *Tunnel
+	port     int
+	url      string
+	starting bool
+	onURL    func(url string)
+	onStop   func()
+}
+
+var (
+	globalManager     *Manager
+	globalManagerOnce sync.Once
+)
+
+// GetManager returns the singleton tunnel manager instance.
+func GetManager() *Manager {
+	globalManagerOnce.Do(func() {
+		globalManager = &Manager{}
+	})
+	return globalManager
+}
+
+// Init configures the manager with the target local port and event callbacks.
+func (m *Manager) Init(port int, onURL func(string), onStop func()) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.port = port
+	m.onURL = onURL
+	m.onStop = onStop
+}
+
+// IsActive returns whether a tunnel is currently running and connected.
+func (m *Manager) IsActive() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.tun != nil && !m.tun.stopped && m.url != ""
+}
+
+// IsStarting returns whether a tunnel connection is currently being negotiated.
+func (m *Manager) IsStarting() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.starting
+}
+
+// URL returns the discovered public URL or empty string.
+func (m *Manager) URL() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.url
+}
+
+// Start launches a cloudflared tunnel pointing to the configured local port.
+func (m *Manager) Start() (string, error) {
+	m.mu.Lock()
+	if m.tun != nil && !m.tun.stopped && m.url != "" {
+		u := m.url
+		m.mu.Unlock()
+		return u, nil
+	}
+	if m.starting {
+		m.mu.Unlock()
+		return "", errors.New("tunnel startup already in progress")
+	}
+	port := m.port
+	if port == 0 {
+		port = 8964
+	}
+	m.starting = true
+	m.mu.Unlock()
+
+	defer func() {
+		m.mu.Lock()
+		m.starting = false
+		m.mu.Unlock()
+	}()
+
+	t, err := Start(context.Background(), port)
+	if err != nil {
+		return "", err
+	}
+
+	url, err := t.WaitURL(30 * time.Second)
+	if err != nil {
+		t.Stop()
+		return "", err
+	}
+
+	m.mu.Lock()
+	m.tun = t
+	m.url = url
+	onURL := m.onURL
+	m.mu.Unlock()
+
+	if onURL != nil {
+		onURL(url)
+	}
+	return url, nil
+}
+
+// Stop terminates any active cloudflared process and notifies listeners.
+func (m *Manager) Stop() {
+	m.mu.Lock()
+	t := m.tun
+	m.tun = nil
+	m.url = ""
+	m.starting = false
+	onStop := m.onStop
+	m.mu.Unlock()
+
+	if t != nil {
+		t.Stop()
+	}
+	if onStop != nil {
+		onStop()
+	}
+}
+
+// Toggle starts the tunnel if inactive, or stops it if active.
+func (m *Manager) Toggle() (bool, string, error) {
+	if m.IsActive() {
+		m.Stop()
+		return false, "", nil
+	}
+	url, err := m.Start()
+	if err != nil {
+		return false, "", err
+	}
+	return true, url, nil
+}

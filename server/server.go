@@ -19,6 +19,7 @@ import (
 	"antiapi/models"
 	"antiapi/translator"
 	"antiapi/tui"
+	"antiapi/tunnel"
 	"antiapi/upstream"
 	"antiapi/web"
 )
@@ -91,10 +92,26 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/accounts/remove", s.cors(s.handleRemoveAccount))
 	s.mux.HandleFunc("/api/accounts/reorder", s.cors(s.handleReorderAccounts))
 	s.mux.HandleFunc("/api/accounts/clear_cooldown", s.cors(s.handleClearCooldown))
+	s.mux.HandleFunc("/api/refresh", s.cors(s.handleClearCooldown))
+	s.mux.HandleFunc("/api/fast_mode", s.cors(s.handleFastMode))
+	s.mux.HandleFunc("/api/tunnel", s.cors(s.handleTunnel))
 	s.mux.HandleFunc("/api/logs", s.cors(s.handleLogs))
 	s.mux.HandleFunc("/oauth/login", s.cors(s.handleOAuthLogin))
 	s.mux.HandleFunc("/quota", s.cors(s.handleStatus))
 	s.mux.HandleFunc("/health", s.cors(s.handleHealth))
+	s.mux.HandleFunc("/exa.language_server_pb.LanguageServerService/Heartbeat", s.cors(s.handleConnectHeartbeat))
+	s.mux.HandleFunc("/exa.language_server_pb.LanguageServerService/GetAvailableModels", s.cors(s.handleConnectAvailableModels))
+	s.mux.HandleFunc("/exa.language_server_pb.LanguageServerService/GetServerConfiguration", s.cors(s.handleConnectServerConfiguration))
+	s.mux.HandleFunc("/exa.language_server_pb.LanguageServerService/GetUserStatus", s.cors(s.handleConnectUserStatus))
+	s.mux.HandleFunc("/exa.language_server_pb.LanguageServerService/GetAuthStatus", s.cors(s.handleConnectAuthStatus))
+	s.mux.HandleFunc("/exa.language_server_pb.LanguageServerService/GetCascadeState", s.cors(s.handleConnectCascadeState))
+	s.mux.HandleFunc("/exa.language_server_pb.LanguageServerService/GetAllConversations", s.cors(s.handleConnectAllConversations))
+	s.mux.HandleFunc("/exa.language_server_pb.LanguageServerService/GetSlashCommands", s.cors(s.handleConnectSlashCommands))
+	s.mux.HandleFunc("/exa.language_server_pb.LanguageServerService/GetSidecars", s.cors(s.handleConnectSidecars))
+	s.mux.HandleFunc("/exa.language_server_pb.LanguageServerService/GetSidecarState", s.cors(s.handleConnectSidecarState))
+	s.mux.HandleFunc("/exa.language_server_pb.LanguageServerService/GetLocalUserInfo", s.cors(s.handleConnectLocalUserInfo))
+	s.mux.HandleFunc("/exa.language_server_pb.LanguageServerService/ListProjects", s.cors(s.handleConnectListProjects))
+	s.mux.HandleFunc("/exa.language_server_pb.LanguageServerService/", s.cors(s.handleConnectRPCFallback))
 	s.mux.HandleFunc("/", s.cors(s.handleDashboard))
 }
 
@@ -263,8 +280,11 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"accounts":         accountEmails,
 		"total":            len(accs),
 		"selected_account": selectedEmail,
+		"fast_mode":        translator.IsGlobalFastMode(),
 		"quota_summaries":  quotaSummaries,
 		"public_url":       s.GetPublicURL(),
+		"tunnel_active":    tunnel.GetManager().IsActive(),
+		"tunnel_starting":  tunnel.GetManager().IsStarting(),
 		"quotas": map[string]float64{
 			"claude_gpt":   claudePct,
 			"gemini_pro":   geminiPct,
@@ -349,8 +369,76 @@ func (s *Server) handleRemoveAccount(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleClearCooldown(w http.ResponseWriter, r *http.Request) {
 	auth.GetPool().ClearAllRateLimits()
+	for _, acc := range auth.GetPool().GetAllAccounts() {
+		go acc.Refresh()
+	}
+	tui.SetActivity("Refreshed quotas & cooldowns via API")
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "message": "cooldowns cleared"})
+	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "message": "cooldowns cleared and quotas refreshed"})
+}
+
+func (s *Server) handleFastMode(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method == http.MethodPost {
+		var body struct {
+			FastMode *bool `json:"fast_mode"`
+			Enabled  *bool `json:"enabled"`
+			Toggle   bool  `json:"toggle"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
+			if body.Toggle {
+				current := translator.IsGlobalFastMode()
+				translator.SetGlobalFastMode(!current)
+			} else if body.FastMode != nil {
+				translator.SetGlobalFastMode(*body.FastMode)
+			} else if body.Enabled != nil {
+				translator.SetGlobalFastMode(*body.Enabled)
+			}
+		} else {
+			current := translator.IsGlobalFastMode()
+			translator.SetGlobalFastMode(!current)
+		}
+		modeStr := "DISABLED"
+		if translator.IsGlobalFastMode() {
+			modeStr = "ENABLED"
+		}
+		tui.SetActivity(fmt.Sprintf("Fast Mode %s via API", modeStr))
+	}
+	json.NewEncoder(w).Encode(map[string]any{
+		"fast_mode": translator.IsGlobalFastMode(),
+	})
+}
+
+func (s *Server) handleTunnel(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	mgr := tunnel.GetManager()
+	if r.Method == http.MethodPost {
+		var body struct {
+			Action string `json:"action"` // "start", "stop", "toggle"
+			Toggle bool   `json:"toggle"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if body.Action == "stop" {
+			mgr.Stop()
+		} else if body.Action == "start" {
+			go func() {
+				_, _ = mgr.Start()
+			}()
+		} else {
+			if mgr.IsActive() {
+				mgr.Stop()
+			} else {
+				go func() {
+					_, _ = mgr.Start()
+				}()
+			}
+		}
+	}
+	json.NewEncoder(w).Encode(map[string]any{
+		"active":   mgr.IsActive(),
+		"starting": mgr.IsStarting(),
+		"url":      mgr.URL(),
+	})
 }
 
 func (s *Server) handleOAuthLogin(w http.ResponseWriter, r *http.Request) {
@@ -401,6 +489,26 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(res)
 }
 
+func isFastModeRequest(r *http.Request) bool {
+	h := strings.ToLower(strings.TrimSpace(r.Header.Get("X-Antiapi-Fast-Mode")))
+	if h == "1" || h == "true" || h == "yes" || h == "on" {
+		return true
+	}
+	h2 := strings.ToLower(strings.TrimSpace(r.Header.Get("X-Fast-Mode")))
+	if h2 == "1" || h2 == "true" || h2 == "yes" || h2 == "on" {
+		return true
+	}
+	q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("fast")))
+	if q == "1" || q == "true" || q == "yes" || q == "on" {
+		return true
+	}
+	q2 := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("fast_mode")))
+	if q2 == "1" || q2 == "true" || q2 == "yes" || q2 == "on" {
+		return true
+	}
+	return false
+}
+
 func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -421,10 +529,26 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if isFastModeRequest(r) && req.FastMode == nil {
+		fast := true
+		req.FastMode = &fast
+	}
+
 	gReq, resolvedModel := translator.ConvertOpenAIToGoogle(&req)
 	log.Printf("[Chat] Routing request: client_model='%s' -> antigravity_model='%s'", req.Model, resolvedModel)
 
-	eventCh, err := s.upstreamClient.StreamGenerate(r.Context(), gReq)
+	sessID := r.Header.Get("X-Session-ID")
+	if sessID == "" {
+		sessID = r.Header.Get("Session-ID")
+	}
+	if sessID == "" {
+		sessID = r.Header.Get("X-Conversation-ID")
+	}
+	if sessID == "" && req.User != "" {
+		sessID = req.User
+	}
+
+	eventCh, err := s.upstreamClient.StreamGenerate(r.Context(), gReq, sessID)
 	if err != nil {
 		statusCode := http.StatusBadGateway
 		if strings.Contains(err.Error(), "(400)") {
@@ -526,10 +650,28 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if isFastModeRequest(r) && req.FastMode == nil {
+		fast := true
+		req.FastMode = &fast
+	}
+
 	gReq, resolvedModel := translator.ConvertClaudeToGoogle(&req)
 	log.Printf("[Claude] Routing request: client_model='%s' -> antigravity_model='%s'", req.Model, resolvedModel)
 
-	eventCh, err := s.upstreamClient.StreamGenerate(r.Context(), gReq)
+	sessID := r.Header.Get("X-Session-ID")
+	if sessID == "" {
+		sessID = r.Header.Get("Session-ID")
+	}
+	if sessID == "" {
+		sessID = r.Header.Get("X-Conversation-ID")
+	}
+	if sessID == "" && req.Metadata != nil {
+		if uid, ok := req.Metadata["user_id"].(string); ok {
+			sessID = uid
+		}
+	}
+
+	eventCh, err := s.upstreamClient.StreamGenerate(r.Context(), gReq, sessID)
 	if err != nil {
 		statusCode := http.StatusBadGateway
 		if strings.Contains(err.Error(), "(400)") {
@@ -589,23 +731,12 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 
 			if parsed.Text != "" {
 				if !textBlockStarted {
-					blockStart := map[string]any{
-						"type":          "content_block_start",
-						"index":         blockIndex,
-						"content_block": map[string]string{"type": "text", "text": ""},
-					}
-					bsBytes, _ := json.Marshal(blockStart)
-					fmt.Fprintf(w, "event: content_block_start\ndata: %s\n\n", bsBytes)
+					fmt.Fprintf(w, "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":%d,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n", blockIndex)
 					textBlockStarted = true
 				}
 
-				ed := map[string]any{
-					"type":  "content_block_delta",
-					"index": blockIndex,
-					"delta": map[string]string{"type": "text_delta", "text": parsed.Text},
-				}
-				dBytes, _ := json.Marshal(ed)
-				fmt.Fprintf(w, "event: content_block_delta\ndata: %s\n\n", dBytes)
+				escText, _ := json.Marshal(parsed.Text)
+				fmt.Fprintf(w, "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":%d,\"delta\":{\"type\":\"text_delta\",\"text\":%s}}\n\n", blockIndex, escText)
 				flusher.Flush()
 			}
 
@@ -772,4 +903,151 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(map[string]any{"logs": rev})
+}
+
+func (s *Server) handleConnectHeartbeat(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"response": map[string]any{
+			"healthy":   true,
+			"timestamp": time.Now().UTC().Format(time.RFC3339),
+		},
+	})
+}
+
+func (s *Server) handleConnectServerConfiguration(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"response": map[string]any{
+			"version":            "2.6.0",
+			"serverCapabilities": []string{"LANGUAGE_SERVER", "AGENT_HUB", "BROWSER_AUTOMATION"},
+			"defaultModel":       "gemini-3.8-flash-high",
+		},
+	})
+}
+
+func (s *Server) handleConnectAuthStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"authResult": map[string]any{
+			"hasValidAuth":  true,
+			"grantedScopes": []string{"email", "profile", "https://www.googleapis.com/auth/aicode"},
+		},
+	})
+}
+
+func (s *Server) handleConnectUserStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	pool := auth.GetPool()
+	accs := pool.GetAllAccounts()
+	email := "user@antigravity.local"
+	if len(accs) > 0 {
+		email = accs[0].Email
+	}
+	json.NewEncoder(w).Encode(map[string]any{
+		"userStatus": map[string]any{
+			"name":  "Antigravity User",
+			"email": email,
+			"planStatus": map[string]any{
+				"planInfo": map[string]any{
+					"teamsTier": "TEAMS_TIER_PRO",
+					"planName":  "Pro",
+				},
+				"availablePromptCredits": 50000,
+				"availableFlowCredits":   150000,
+			},
+		},
+	})
+}
+
+func (s *Server) handleConnectAvailableModels(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	reg := models.GetRegistry()
+	all := reg.GetAllModels()
+	catalog := map[string]any{
+		"defaultAgentModelId": "gemini-3.8-flash-high",
+		"models":              all,
+	}
+	json.NewEncoder(w).Encode(map[string]any{
+		"response": catalog,
+	})
+}
+
+func (s *Server) handleConnectCascadeState(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"response": map[string]any{
+			"cascadeId":    "cascade-active-01",
+			"status":       "CASCADE_STATUS_IDLE",
+			"currentModel": "gemini-3.8-flash-high",
+		},
+	})
+}
+
+func (s *Server) handleConnectAllConversations(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"response": map[string]any{
+			"conversations": []any{},
+		},
+	})
+}
+
+func (s *Server) handleConnectSlashCommands(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"response": map[string]any{
+			"slashCommands": []map[string]string{
+				{"name": "goal", "description": "Long-running autonomous execution."},
+				{"name": "schedule", "description": "Cron or one-shot timers."},
+				{"name": "compact", "description": "Compact conversation context."},
+				{"name": "plan", "description": "Interactive design interview and planning."},
+			},
+		},
+	})
+}
+
+func (s *Server) handleConnectSidecars(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"response": map[string]any{
+			"sidecars": []any{},
+		},
+	})
+}
+
+func (s *Server) handleConnectSidecarState(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"response": map[string]any{
+			"active": false,
+		},
+	})
+}
+
+func (s *Server) handleConnectLocalUserInfo(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	username := os.Getenv("USER")
+	if username == "" {
+		username = "user"
+	}
+	home, _ := os.UserHomeDir()
+	json.NewEncoder(w).Encode(map[string]any{
+		"username":   username,
+		"homeDirUri": "file://" + home,
+	})
+}
+
+func (s *Server) handleConnectListProjects(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"projectIds": []string{"default-cli-project", "outside-of-project"},
+	})
+}
+
+func (s *Server) handleConnectRPCFallback(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"response": map[string]any{},
+	})
 }

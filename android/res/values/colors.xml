@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Backgrounds -->
+    <color name="bg_canvas">#080A0E</color>
+    <color name="bg_header">#0D1117</color>
+    <color name="bg_surface">#0F141D</color>
+    <color name="bg_surface_elevated">#151B26</color>
+    <color name="bg_surface_hover">#1A2230</color>
+    <color name="bg_input">#0A0D14</color>
+    <color name="bg_terminal">#06080B</color>
+
+    <!-- Hairline Borders -->
+    <color name="border_hairline">#1B2332</color>
+    <color name="border_subtle">#263244</color>
+    <color name="border_focus">#38BDF8</color>
+
+    <!-- Brand Accents -->
+    <color name="accent_primary">#2563EB</color>
+    <color name="accent_sky">#38BDF8</color>
+    <color name="accent_indigo">#6366F1</color>
+
+    <!-- Semantic States -->
+    <color name="status_success">#10B981</color>
+    <color name="status_warning">#F59E0B</color>
+    <color name="status_danger">#EF4444</color>
+
+    <!-- High-Contrast Text Ramp (WCAG AAA) -->
+    <color name="text_primary">#F8FAFC</color>
+    <color name="text_secondary">#CBD5E1</color>
+    <color name="text_muted">#94A3B8</color>
+    <color name="text_code">#E2E8F0</color>
+</resources>
+

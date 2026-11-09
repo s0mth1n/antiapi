@@ -4,49 +4,38 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#090B0E">
+    android:background="@color/bg_canvas">
 
-    <!-- SYSTEM STATUS BAR SPACER -->
+    <!-- SYSTEM STATUS BAR INSET SPACER -->
     <View
         android:id="@+id/status_bar_spacer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:background="#0D1015" />
+        android:background="@color/bg_header" />
 
     <!-- TOP APPLICATION BAR -->
     <LinearLayout
         android:id="@+id/app_header"
         android:layout_width="match_parent"
-        android:layout_height="54dp"
-        android:background="#0D1015"
+        android:layout_height="56dp"
+        android:background="@color/bg_header"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="16dp"
         android:paddingEnd="16dp">
 
-        <TextView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:background="#1E293B"
-            android:gravity="center"
-            android:text="α"
-            android:textColor="#38BDF8"
-            android:textSize="15sp"
-            android:textStyle="bold" />
-
+        <!-- Title & Live Status Chip -->
         <LinearLayout
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:layout_weight="1"
             android:orientation="vertical">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="AntiAPI"
-                android:textColor="#F8FAFC"
-                android:textSize="15sp"
+                android:textColor="@color/text_primary"
+                android:textSize="17sp"
                 android:textStyle="bold" />
 
             <TextView
@@ -55,92 +44,30 @@
                 android:layout_height="wrap_content"
                 android:fontFamily="monospace"
                 android:text="● Stopped"
-                android:textColor="#EF4444"
-                android:textSize="11sp" />
+                android:textColor="@color/status_danger"
+                android:textSize="12sp"
+                android:textStyle="bold" />
         </LinearLayout>
-
-        <Button
-            android:id="@+id/btn_refresh"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:layout_marginEnd="8dp"
-            android:background="@drawable/btn_secondary_bg"
-            android:text="⟳"
-            android:textColor="#94A3B8"
-            android:textSize="16sp" />
-
-        <Button
-            android:id="@+id/btn_header_toggle"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:background="@drawable/btn_success_bg"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:text="Start"
-            android:textColor="#FFFFFF"
-            android:textSize="12sp"
-            android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- TAB SEGMENTED NAVIGATION -->
-    <LinearLayout
-        android:id="@+id/tab_bar"
-        android:layout_width="match_parent"
-        android:layout_height="40dp"
-        android:layout_marginStart="12dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginEnd="12dp"
-        android:layout_marginBottom="8dp"
-        android:background="@drawable/tab_bar_bg"
-        android:orientation="horizontal"
-        android:padding="3dp">
-
-        <Button
-            android:id="@+id/btn_tab_gateway"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="@drawable/tab_active_bg"
-            android:text="Gateway"
-            android:textColor="#F8FAFC"
-            android:textSize="12sp"
-            android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/btn_tab_quotas"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="@drawable/tab_inactive_bg"
-            android:text="Quotas &amp; Accounts"
-            android:textColor="#94A3B8"
-            android:textSize="12sp" />
-
-        <Button
-            android:id="@+id/btn_tab_logs"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="@drawable/tab_inactive_bg"
-            android:text="Logs"
-            android:textColor="#94A3B8"
-            android:textSize="12sp" />
-    </LinearLayout>
-
-    <!-- TAB CONTENT CONTAINER -->
+    <!-- CONTENT VIEW CONTAINER -->
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1">
 
-        <!-- 1. GATEWAY & CONNECT TAB -->
+        <!-- ========================================== -->
+        <!-- TAB 1: GATEWAY & CONNECTIVITY              -->
+        <!-- ========================================== -->
         <ScrollView
             android:id="@+id/layout_tab_gateway"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:paddingStart="14dp"
-            android:paddingTop="4dp"
-            android:paddingEnd="14dp"
+            android:scrollbars="none"
+            android:overScrollMode="never"
+            android:paddingStart="16dp"
+            android:paddingTop="12dp"
+            android:paddingEnd="16dp"
             android:paddingBottom="16dp"
             android:visibility="visible">
 
@@ -149,12 +76,12 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
-                <!-- Gateway Status Card -->
+                <!-- 1. Gateway Status Hero Card -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
-                    android:background="@drawable/card_bg"
+                    android:background="@drawable/card_bg_elevated"
                     android:orientation="vertical"
                     android:padding="16dp">
 
@@ -162,9 +89,9 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:fontFamily="monospace"
-                        android:text="LOCAL GATEWAY"
-                        android:textColor="#64748B"
-                        android:textSize="11sp"
+                        android:text="GATEWAY STATUS"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp"
                         android:textStyle="bold" />
 
                     <TextView
@@ -173,215 +100,64 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="6dp"
                         android:text="Status: Stopped"
-                        android:textColor="#EF4444"
-                        android:textSize="16sp"
+                        android:textColor="@color/status_danger"
+                        android:textSize="17sp"
                         android:textStyle="bold" />
 
-                    <TextView
-                        android:id="@+id/tv_endpoint"
-                        android:layout_width="wrap_content"
+                    <!-- Base URL Box -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:fontFamily="monospace"
-                        android:text="http://127.0.0.1:8964/v1"
-                        android:textColor="#CBD5E1"
-                        android:textSize="13sp" />
+                        android:layout_marginTop="12dp"
+                        android:background="@drawable/input_bg"
+                        android:orientation="vertical"
+                        android:padding="12dp">
 
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="monospace"
+                            android:text="LOCAL BASE URL"
+                            android:textColor="@color/text_muted"
+                            android:textSize="12sp" />
+
+                        <TextView
+                            android:id="@+id/tv_endpoint"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:fontFamily="monospace"
+                            android:text="http://127.0.0.1:8964/v1"
+                            android:textColor="@color/text_code"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <!-- Copy Local Base URL -->
                     <Button
                         android:id="@+id/btn_copy_local"
                         android:layout_width="match_parent"
                         android:layout_height="40dp"
-                        android:layout_marginTop="12dp"
+                        android:layout_marginTop="10dp"
                         android:background="@drawable/btn_secondary_bg"
                         android:text="Copy Local Base URL"
-                        android:textColor="#F8FAFC"
-                        android:textSize="12sp" />
-                </LinearLayout>
-
-                <!-- Public Tunnel Card -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="12dp"
-                    android:background="@drawable/card_bg"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:fontFamily="monospace"
-                        android:text="PUBLIC CLOUDFLARE TUNNEL"
-                        android:textColor="#64748B"
-                        android:textSize="11sp"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
                         android:textStyle="bold" />
 
-                    <TextView
-                        android:id="@+id/tv_public_url"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:fontFamily="monospace"
-                        android:text="Public Tunnel: Connecting..."
-                        android:textColor="#FBBF24"
-                        android:textSize="13sp" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="Global HTTPS endpoint for remote laptops, IDE extensions, and agents."
-                        android:textColor="#94A3B8"
-                        android:textSize="12sp" />
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:orientation="horizontal">
-
-                        <Button
-                            android:id="@+id/btn_copy_public"
-                            android:layout_width="0dp"
-                            android:layout_height="40dp"
-                            android:layout_weight="1"
-                            android:background="@drawable/btn_primary_bg"
-                            android:text="Copy Public URL"
-                            android:textColor="#FFFFFF"
-                            android:textSize="12sp"
-                            android:textStyle="bold" />
-
-                        <Space
-                            android:layout_width="8dp"
-                            android:layout_height="1dp" />
-
-                        <Button
-                            android:id="@+id/btn_share_public"
-                            android:layout_width="74dp"
-                            android:layout_height="40dp"
-                            android:background="@drawable/btn_secondary_bg"
-                            android:text="Share"
-                            android:textColor="#F8FAFC"
-                            android:textSize="12sp" />
-                    </LinearLayout>
-                </LinearLayout>
-
-                <!-- Quick Connect Snippets Card -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="12dp"
-                    android:background="@drawable/card_bg"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:fontFamily="monospace"
-                        android:text="REMOTE CLIENT QUICK CONNECT"
-                        android:textColor="#64748B"
-                        android:textSize="11sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="1-tap snippets for your remote laptop, terminal, Cursor, or Hermes Agent."
-                        android:textColor="#94A3B8"
-                        android:textSize="12sp" />
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:orientation="horizontal">
-
-                        <Button
-                            android:id="@+id/btn_copy_env"
-                            android:layout_width="0dp"
-                            android:layout_height="40dp"
-                            android:layout_weight="1"
-                            android:background="@drawable/btn_secondary_bg"
-                            android:text="Copy Shell Env"
-                            android:textColor="#F8FAFC"
-                            android:textSize="12sp" />
-
-                        <Space
-                            android:layout_width="8dp"
-                            android:layout_height="1dp" />
-
-                        <Button
-                            android:id="@+id/btn_copy_curl"
-                            android:layout_width="0dp"
-                            android:layout_height="40dp"
-                            android:layout_weight="1"
-                            android:background="@drawable/btn_secondary_bg"
-                            android:text="Copy cURL Test"
-                            android:textColor="#F8FAFC"
-                            android:textSize="12sp" />
-                    </LinearLayout>
-                </LinearLayout>
-
-                <!-- Service Controls Card -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="12dp"
-                    android:background="@drawable/card_bg"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:fontFamily="monospace"
-                        android:text="ENGINE CONTROLS"
-                        android:textColor="#64748B"
-                        android:textSize="11sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="Foreground daemon with CPU partial wake lock to prevent background sleep."
-                        android:textColor="#94A3B8"
-                        android:textSize="12sp" />
-
+                    <!-- Primary Full-Width Service Action -->
                     <Button
                         android:id="@+id/btn_toggle"
                         android:layout_width="match_parent"
                         android:layout_height="44dp"
-                        android:layout_marginTop="12dp"
+                        android:layout_marginTop="10dp"
                         android:background="@drawable/btn_success_bg"
-                        android:text="Start Server"
+                        android:text="Start Gateway Service"
                         android:textColor="#FFFFFF"
                         android:textSize="13sp"
                         android:textStyle="bold" />
                 </LinearLayout>
 
-            </LinearLayout>
-        </ScrollView>
-
-        <!-- 2. QUOTAS & ACCOUNTS TAB (PURE NATIVE) -->
-        <ScrollView
-            android:id="@+id/layout_tab_quotas"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:paddingStart="14dp"
-            android:paddingTop="4dp"
-            android:paddingEnd="14dp"
-            android:paddingBottom="16dp"
-            android:visibility="gone">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-                <!-- Account Pool & Individual Selection Card -->
+                <!-- 2. Cloudflare Ingress Tunnel Card -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -401,39 +177,305 @@
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:fontFamily="monospace"
+                            android:text="CLOUDFLARE INGRESS TUNNEL"
+                            android:textColor="@color/text_muted"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tv_tunnel_badge"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:background="@drawable/badge_stopped_bg"
+                            android:fontFamily="monospace"
+                            android:paddingStart="8dp"
+                            android:paddingTop="3dp"
+                            android:paddingEnd="8dp"
+                            android:paddingBottom="3dp"
+                            android:text="OFFLINE"
+                            android:textColor="@color/status_danger"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Secure public HTTPS ingress for Cursor, remote agents, and external tools."
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
+
+                    <!-- Public URL Display -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:background="@drawable/input_bg"
+                        android:padding="10dp">
+
+                        <TextView
+                            android:id="@+id/tv_public_url"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="monospace"
+                            android:text="Public Tunnel: Offline"
+                            android:textColor="@color/text_muted"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <!-- Tunnel Actions -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:orientation="horizontal">
+
+                        <Button
+                            android:id="@+id/btn_toggle_tunnel"
+                            android:layout_width="0dp"
+                            android:layout_height="40dp"
+                            android:layout_marginEnd="6dp"
+                            android:layout_weight="1.2"
+                            android:background="@drawable/btn_secondary_bg"
+                            android:text="Start Tunnel"
+                            android:textColor="@color/text_primary"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                        <Button
+                            android:id="@+id/btn_copy_public"
+                            android:layout_width="0dp"
+                            android:layout_height="40dp"
+                            android:layout_marginEnd="6dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/btn_secondary_bg"
+                            android:text="Copy"
+                            android:textColor="@color/text_primary"
+                            android:textSize="12sp" />
+
+                        <Button
+                            android:id="@+id/btn_share_public"
+                            android:layout_width="0dp"
+                            android:layout_height="40dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/btn_secondary_bg"
+                            android:text="Share"
+                            android:textColor="@color/text_primary"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- 3. Fast Mode (Streaming Latency Accelerator) Card -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    android:background="@drawable/card_bg"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:fontFamily="monospace"
+                            android:text="LATENCY ACCELERATOR"
+                            android:textColor="@color/text_muted"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tv_fast_mode_badge"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:background="@drawable/badge_stopped_bg"
+                            android:fontFamily="monospace"
+                            android:paddingStart="8dp"
+                            android:paddingTop="3dp"
+                            android:paddingEnd="8dp"
+                            android:paddingBottom="3dp"
+                            android:text="DISABLED"
+                            android:textColor="@color/status_danger"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tv_fast_mode_status"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Fast Mode: Disabled (Standard thinking enabled)"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="Zero-budget thinking mode for Claude &amp; Gemini models for ~2.8x faster initial token stream."
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
+
+                    <Button
+                        android:id="@+id/btn_toggle_fast_mode"
+                        android:layout_width="match_parent"
+                        android:layout_height="40dp"
+                        android:layout_marginTop="10dp"
+                        android:background="@drawable/btn_secondary_bg"
+                        android:text="Enable Fast Mode"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <!-- 4. Client Integration Quick Snippets -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp"
+                    android:background="@drawable/card_bg"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="monospace"
+                        android:text="DEVELOPER QUICK CONNECT"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="Point any OpenAI-compatible client, CLI, or agent directly to your gateway."
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:orientation="horizontal">
+
+                        <Button
+                            android:id="@+id/btn_copy_env"
+                            android:layout_width="0dp"
+                            android:layout_height="40dp"
+                            android:layout_marginEnd="8dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/btn_secondary_bg"
+                            android:text="Copy .env Export"
+                            android:textColor="@color/text_primary"
+                            android:textSize="12sp" />
+
+                        <Button
+                            android:id="@+id/btn_copy_curl"
+                            android:layout_width="0dp"
+                            android:layout_height="40dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/btn_secondary_bg"
+                            android:text="Copy curl Test"
+                            android:textColor="@color/text_primary"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+            </LinearLayout>
+        </ScrollView>
+
+        <!-- ========================================== -->
+        <!-- TAB 2: QUOTAS & ACCOUNTS                   -->
+        <!-- ========================================== -->
+        <ScrollView
+            android:id="@+id/layout_tab_quotas"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scrollbars="none"
+            android:overScrollMode="never"
+            android:paddingStart="16dp"
+            android:paddingTop="12dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="16dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <!-- Compact Unified Account Pool Card -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    android:background="@drawable/card_bg"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <!-- Header Row: Title, active count, and compact Sync action -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="monospace"
                             android:text="ACCOUNT POOL"
-                            android:textColor="#64748B"
+                            android:textColor="@color/text_muted"
                             android:textSize="11sp"
                             android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tv_accounts_summary"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:layout_weight="1"
+                            android:ellipsize="end"
+                            android:fontFamily="monospace"
+                            android:singleLine="true"
+                            android:text="0 active"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="11sp" />
 
                         <Button
                             android:id="@+id/btn_sync_quotas"
                             android:layout_width="wrap_content"
-                            android:layout_height="32dp"
+                            android:layout_height="28dp"
                             android:background="@drawable/btn_secondary_bg"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
                             android:paddingStart="10dp"
+                            android:paddingTop="0dp"
                             android:paddingEnd="10dp"
-                            android:text="Sync Quotas"
-                            android:textColor="#38BDF8"
-                            android:textSize="11sp" />
+                            android:paddingBottom="0dp"
+                            android:text="⟳ Sync"
+                            android:textColor="@color/text_primary"
+                            android:textSize="11sp"
+                            android:textStyle="bold" />
                     </LinearLayout>
 
-                    <TextView
-                        android:id="@+id/tv_accounts_summary"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:fontFamily="monospace"
-                        android:text="Querying accounts..."
-                        android:textColor="#94A3B8"
-                        android:textSize="12sp" />
-
-                    <!-- Horizontal Account Pills -->
+                    <!-- Account Chips Horizontal Scroll -->
                     <HorizontalScrollView
-                        android:id="@+id/scroll_accounts"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
+                        android:layout_marginTop="8dp"
+                        android:overScrollMode="never"
                         android:scrollbars="none">
 
                         <LinearLayout
@@ -443,74 +485,96 @@
                             android:orientation="horizontal" />
                     </HorizontalScrollView>
 
-                    <!-- Selected Account Details & Remove Action -->
+                    <!-- Selected Account Compact Detail Strip -->
                     <LinearLayout
-                        android:id="@+id/layout_selected_account_info"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:background="@drawable/terminal_bg"
-                        android:orientation="vertical"
-                        android:padding="12dp">
+                        android:layout_marginTop="8dp"
+                        android:background="@drawable/input_bg"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="10dp"
+                        android:paddingTop="8dp"
+                        android:paddingEnd="10dp"
+                        android:paddingBottom="8dp">
 
                         <LinearLayout
-                            android:layout_width="match_parent"
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:gravity="center_vertical"
-                            android:orientation="horizontal">
+                            android:layout_marginEnd="8dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:id="@+id/tv_selected_account_email"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:ellipsize="middle"
+                                android:singleLine="true"
+                                android:text="No account selected"
+                                android:textColor="@color/text_primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
 
                             <LinearLayout
-                                android:layout_width="0dp"
+                                android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:orientation="vertical">
-
-                                <TextView
-                                    android:id="@+id/tv_selected_account_email"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:fontFamily="monospace"
-                                    android:text="--@--"
-                                    android:textColor="#F8FAFC"
-                                    android:textSize="13sp"
-                                    android:textStyle="bold" />
-
-                                <TextView
-                                    android:id="@+id/tv_selected_account_project"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginTop="2dp"
-                                    android:fontFamily="monospace"
-                                    android:text="Project: --"
-                                    android:textColor="#64748B"
-                                    android:textSize="11sp" />
+                                android:layout_marginTop="2dp"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
 
                                 <TextView
                                     android:id="@+id/tv_selected_account_status"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
-                                    android:layout_marginTop="2dp"
                                     android:fontFamily="monospace"
-                                    android:text="Status: Active"
-                                    android:textColor="#10B981"
-                                    android:textSize="11sp" />
-                            </LinearLayout>
+                                    android:text="Offline"
+                                    android:textColor="@color/status_danger"
+                                    android:textSize="11sp"
+                                    android:textStyle="bold" />
 
-                            <Button
-                                android:id="@+id/btn_remove_account"
-                                android:layout_width="wrap_content"
-                                android:layout_height="32dp"
-                                android:background="@drawable/btn_danger_bg"
-                                android:paddingStart="12dp"
-                                android:paddingEnd="12dp"
-                                android:text="Remove"
-                                android:textColor="#FFFFFF"
-                                android:textSize="11sp" />
+                                <TextView
+                                    android:id="@+id/tv_selected_account_separator"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text=" · "
+                                    android:textColor="@color/text_muted"
+                                    android:textSize="11sp"
+                                    android:visibility="gone" />
+
+                                <TextView
+                                    android:id="@+id/tv_selected_account_project"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:ellipsize="end"
+                                    android:fontFamily="monospace"
+                                    android:singleLine="true"
+                                    android:text=""
+                                    android:textColor="@color/text_muted"
+                                    android:textSize="11sp"
+                                    android:visibility="gone" />
+                            </LinearLayout>
                         </LinearLayout>
+
+                        <Button
+                            android:id="@+id/btn_remove_account"
+                            android:layout_width="wrap_content"
+                            android:layout_height="28dp"
+                            android:background="@drawable/btn_danger_bg"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:paddingStart="10dp"
+                            android:paddingTop="0dp"
+                            android:paddingEnd="10dp"
+                            android:paddingBottom="0dp"
+                            android:text="Remove"
+                            android:textColor="#FFFFFF"
+                            android:textSize="11sp"
+                            android:textStyle="bold" />
                     </LinearLayout>
                 </LinearLayout>
 
-                <!-- Gemini 3.8 Flash Individual Capacity Card -->
+                <!-- Live Quota Usage Gauges Card -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -523,9 +587,9 @@
                         android:id="@+id/tv_quota_card_title"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Gemini 3.8 Flash Capacity"
-                        android:textColor="#F8FAFC"
-                        android:textSize="14sp"
+                        android:text="Gemini Pro &amp; Flash Quota Usage"
+                        android:textColor="@color/text_primary"
+                        android:textSize="15sp"
                         android:textStyle="bold" />
 
                     <TextView
@@ -533,110 +597,122 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:text="Individual upstream quota for selected account"
-                        android:textColor="#64748B"
-                        android:textSize="11sp" />
+                        android:text="Live telemetry synced directly from Google Cloud Code upstream."
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
 
-                    <!-- Weekly -->
+                    <!-- Gauge 1: Weekly Limit -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
+                        android:layout_marginTop="14dp"
+                        android:orientation="vertical">
 
-                        <TextView
-                            android:layout_width="0dp"
+                        <LinearLayout
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="Weekly Limit"
-                            android:textColor="#94A3B8"
-                            android:textSize="12sp" />
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Weekly Quota"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tv_gemini_weekly_pct"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="monospace"
+                                android:text="0%"
+                                android:textColor="@color/text_primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <ProgressBar
+                            android:id="@+id/progress_gemini_weekly"
+                            style="?android:attr/progressBarStyleHorizontal"
+                            android:layout_width="match_parent"
+                            android:layout_height="8dp"
+                            android:layout_marginTop="6dp"
+                            android:max="100"
+                            android:progress="0"
+                            android:progressDrawable="@drawable/progress_quota_emerald" />
 
                         <TextView
-                            android:id="@+id/tv_gemini_weekly_pct"
+                            android:id="@+id/tv_gemini_weekly_reset"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
                             android:fontFamily="monospace"
-                            android:text="100.0%"
-                            android:textColor="#10B981"
-                            android:textSize="12sp"
-                            android:textStyle="bold" />
+                            android:text="Resets: --"
+                            android:textColor="@color/text_muted"
+                            android:textSize="12sp" />
                     </LinearLayout>
 
-                    <ProgressBar
-                        android:id="@+id/progress_gemini_weekly"
-                        style="?android:attr/progressBarStyleHorizontal"
-                        android:layout_width="match_parent"
-                        android:layout_height="8dp"
-                        android:layout_marginTop="6dp"
-                        android:max="100"
-                        android:progress="100"
-                        android:progressDrawable="@drawable/progress_quota_emerald" />
-
-                    <TextView
-                        android:id="@+id/tv_gemini_weekly_reset"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:fontFamily="monospace"
-                        android:text="Reset: --"
-                        android:textColor="#64748B"
-                        android:textSize="10sp" />
-
-                    <!-- 5-Hour -->
+                    <!-- Gauge 2: 5-Hour Sliding Window Limit -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
+                        android:layout_marginTop="14dp"
+                        android:orientation="vertical">
 
-                        <TextView
-                            android:layout_width="0dp"
+                        <LinearLayout
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="5-Hour Window"
-                            android:textColor="#94A3B8"
-                            android:textSize="12sp" />
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="5-Hour Window Quota"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tv_gemini_5h_pct"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="monospace"
+                                android:text="0%"
+                                android:textColor="@color/text_primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <ProgressBar
+                            android:id="@+id/progress_gemini_5h"
+                            style="?android:attr/progressBarStyleHorizontal"
+                            android:layout_width="match_parent"
+                            android:layout_height="8dp"
+                            android:layout_marginTop="6dp"
+                            android:max="100"
+                            android:progress="0"
+                            android:progressDrawable="@drawable/progress_quota_emerald" />
 
                         <TextView
-                            android:id="@+id/tv_gemini_5h_pct"
+                            android:id="@+id/tv_gemini_5h_reset"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
                             android:fontFamily="monospace"
-                            android:text="100.0%"
-                            android:textColor="#10B981"
-                            android:textSize="12sp"
-                            android:textStyle="bold" />
+                            android:text="Resets: --"
+                            android:textColor="@color/text_muted"
+                            android:textSize="12sp" />
                     </LinearLayout>
-
-                    <ProgressBar
-                        android:id="@+id/progress_gemini_5h"
-                        style="?android:attr/progressBarStyleHorizontal"
-                        android:layout_width="match_parent"
-                        android:layout_height="8dp"
-                        android:layout_marginTop="6dp"
-                        android:max="100"
-                        android:progress="100"
-                        android:progressDrawable="@drawable/progress_quota_emerald" />
-
-                    <TextView
-                        android:id="@+id/tv_gemini_5h_reset"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:fontFamily="monospace"
-                        android:text="Reset: --"
-                        android:textColor="#64748B"
-                        android:textSize="10sp" />
                 </LinearLayout>
 
-                <!-- Add Account Card -->
+                <!-- Add Account Section -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="12dp"
+                    android:layout_marginBottom="16dp"
                     android:background="@drawable/card_bg"
                     android:orientation="vertical"
                     android:padding="16dp">
@@ -645,177 +721,209 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:fontFamily="monospace"
-                        android:text="ADD ACCOUNT"
-                        android:textColor="#64748B"
-                        android:textSize="11sp"
+                        android:text="ADD ACCOUNT TO POOL"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp"
                         android:textStyle="bold" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:text="Sign in through Google OAuth or paste a refresh token directly."
-                        android:textColor="#94A3B8"
+                        android:text="Authorize via Google OAuth or paste a manual refresh token."
+                        android:textColor="@color/text_muted"
                         android:textSize="12sp" />
 
+                    <!-- OAuth Login Button -->
                     <Button
                         android:id="@+id/btn_oauth_login"
                         android:layout_width="match_parent"
-                        android:layout_height="42dp"
-                        android:layout_marginTop="12dp"
-                        android:background="@drawable/btn_secondary_bg"
-                        android:text="Sign In with Google (OAuth)"
-                        android:textColor="#38BDF8"
-                        android:textSize="13sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:gravity="center"
-                        android:fontFamily="monospace"
-                        android:text="— OR MANUAL REFRESH TOKEN —"
-                        android:textColor="#475569"
-                        android:textSize="10sp" />
-
-                    <EditText
-                        android:id="@+id/et_refresh_token"
-                        android:layout_width="match_parent"
-                        android:layout_height="44dp"
-                        android:layout_marginTop="10dp"
-                        android:background="@drawable/input_bg"
-                        android:fontFamily="monospace"
-                        android:hint="Paste 1//... refresh token"
-                        android:inputType="textNoSuggestions"
-                        android:maxLines="1"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="12dp"
-                        android:textColor="#F8FAFC"
-                        android:textColorHint="#64748B"
-                        android:textSize="12sp" />
-
-                    <Button
-                        android:id="@+id/btn_add_token"
-                        android:layout_width="match_parent"
                         android:layout_height="40dp"
-                        android:layout_marginTop="8dp"
-                        android:background="@drawable/btn_secondary_bg"
-                        android:text="Add Account"
-                        android:textColor="#F8FAFC"
-                        android:textSize="12sp" />
-                </LinearLayout>
-
-                <!-- Supported Models Card -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="12dp"
-                    android:background="@drawable/card_bg"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:fontFamily="monospace"
-                        android:text="AVAILABLE PRODUCTION MODELS"
-                        android:textColor="#64748B"
-                        android:textSize="11sp"
+                        android:layout_marginTop="10dp"
+                        android:background="@drawable/btn_primary_bg"
+                        android:text="Sign In with Google (Browser OAuth)"
+                        android:textColor="#FFFFFF"
+                        android:textSize="12sp"
                         android:textStyle="bold" />
 
-                    <TextView
-                        android:layout_width="wrap_content"
+                    <!-- Manual Refresh Token Row -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:fontFamily="monospace"
-                        android:lineSpacingExtra="4dp"
-                        android:text="• gemini-3.8-flash (Standard)\n• gemini-3.8-flash-high (High Reasoning)\n• gemini-3.8-flash-medium (Medium Reasoning)\n• gemini-3.8-flash-low (Low Reasoning)"
-                        android:textColor="#CBD5E1"
-                        android:textSize="12sp" />
+                        android:layout_marginTop="10dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <EditText
+                            android:id="@+id/et_refresh_token"
+                            android:layout_width="0dp"
+                            android:layout_height="40dp"
+                            android:layout_marginEnd="8dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/input_bg"
+                            android:fontFamily="monospace"
+                            android:hint="Paste 1//0... token"
+                            android:paddingStart="10dp"
+                            android:paddingEnd="10dp"
+                            android:singleLine="true"
+                            android:textColor="@color/text_primary"
+                            android:textColorHint="@color/text_muted"
+                            android:textSize="12sp" />
+
+                        <Button
+                            android:id="@+id/btn_add_token"
+                            android:layout_width="wrap_content"
+                            android:layout_height="40dp"
+                            android:background="@drawable/btn_secondary_bg"
+                            android:paddingStart="16dp"
+                            android:paddingEnd="16dp"
+                            android:text="Add"
+                            android:textColor="@color/text_primary"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
                 </LinearLayout>
 
             </LinearLayout>
         </ScrollView>
 
-        <!-- 3. CONSOLE LOGS TAB -->
+        <!-- ========================================== -->
+        <!-- TAB 3: SERVER LOGS & CONSOLE               -->
+        <!-- ========================================== -->
         <LinearLayout
             android:id="@+id/layout_tab_logs"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:orientation="vertical"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
+            android:paddingStart="16dp"
+            android:paddingTop="12dp"
+            android:paddingEnd="16dp"
             android:paddingBottom="12dp"
             android:visibility="gone">
 
+            <!-- Console Toolbar -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
                 android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingBottom="8dp">
+                android:orientation="horizontal">
 
                 <TextView
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:fontFamily="monospace"
-                    android:text="ENGINE LOGCAT"
-                    android:textColor="#64748B"
-                    android:textSize="11sp"
+                    android:text="LIVE SERVER CONSOLE"
+                    android:textColor="@color/text_muted"
+                    android:textSize="12sp"
                     android:textStyle="bold" />
 
                 <Button
                     android:id="@+id/btn_clear_logs"
                     android:layout_width="wrap_content"
                     android:layout_height="32dp"
-                    android:layout_marginEnd="6dp"
+                    android:layout_marginEnd="8dp"
                     android:background="@drawable/btn_secondary_bg"
-                    android:paddingStart="10dp"
-                    android:paddingEnd="10dp"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
                     android:text="Clear"
-                    android:textColor="#94A3B8"
-                    android:textSize="11sp" />
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
 
                 <Button
                     android:id="@+id/btn_copy_logs"
                     android:layout_width="wrap_content"
                     android:layout_height="32dp"
                     android:background="@drawable/btn_secondary_bg"
-                    android:paddingStart="10dp"
-                    android:paddingEnd="10dp"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
                     android:text="Copy All"
-                    android:textColor="#F8FAFC"
-                    android:textSize="11sp" />
+                    android:textColor="@color/text_primary"
+                    android:textSize="12sp" />
             </LinearLayout>
 
+            <!-- Scrollable Dark Terminal Box -->
             <ScrollView
                 android:id="@+id/scroll_logs"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
                 android:layout_weight="1"
+                android:scrollbars="none"
+                android:overScrollMode="never"
                 android:background="@drawable/terminal_bg"
-                android:padding="10dp">
+                android:padding="12dp">
 
                 <TextView
                     android:id="@+id/tv_logs"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:fontFamily="monospace"
+                    android:lineSpacingMultiplier="1.2"
                     android:text="AntiAPI server console initialized.\n"
-                    android:textColor="#80CBC4"
-                    android:textSize="11sp" />
+                    android:textColor="#38BDF8"
+                    android:textSize="12sp" />
             </ScrollView>
         </LinearLayout>
 
     </FrameLayout>
 
-    <!-- NAVIGATION BAR SPACER -->
+    <!-- ========================================== -->
+    <!-- THUMB-FRIENDLY BOTTOM NAVIGATION BAR        -->
+    <!-- ========================================== -->
+    <LinearLayout
+        android:id="@+id/tab_bar"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="@drawable/bottom_nav_bg"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp">
+
+        <Button
+            android:id="@+id/btn_tab_gateway"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/tab_active_bg"
+            android:text="Gateway"
+            android:textColor="@color/text_primary"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btn_tab_quotas"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/tab_inactive_bg"
+            android:text="Quotas"
+            android:textColor="@color/text_muted"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btn_tab_logs"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:background="@drawable/tab_inactive_bg"
+            android:text="Console"
+            android:textColor="@color/text_muted"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- NAVIGATION BAR INSET SPACER -->
     <View
         android:id="@+id/nav_bar_spacer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:background="#090B0E" />
+        android:background="@color/bg_canvas" />
 
 </LinearLayout>

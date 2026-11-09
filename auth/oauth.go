@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"antiapi/transport"
 )
 
 const (
@@ -96,7 +98,7 @@ func ExchangeCode(code, state string) (refreshToken, accessToken, email string, 
 	form.Set("grant_type", "authorization_code")
 	form.Set("code_verifier", session.Verifier)
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := transport.NewClient(15 * time.Second)
 	resp, err := client.PostForm(TokenURL, form)
 	if err != nil {
 		return "", "", "", fmt.Errorf("token exchange failed: %w", err)
@@ -150,11 +152,20 @@ func StartOAuthCallbackListener() {
 
 	mux := http.NewServeMux()
 	server := &http.Server{
-		Addr:    fmt.Sprintf("127.0.0.1:%d", OAuthCallbackPort),
+		Addr:    fmt.Sprintf(":%d", OAuthCallbackPort),
 		Handler: mux,
 	}
 
 	mux.HandleFunc("/oauth-callback", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Private-Network", "true")
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "*")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
 		code := r.URL.Query().Get("code")
 		state := r.URL.Query().Get("state")
 
@@ -174,9 +185,9 @@ func StartOAuthCallbackListener() {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprintf(w, `<html><body style="background:#090d16;color:#f0f4fc;font-family:sans-serif;padding:3rem;text-align:center;">
 			<h1 style="color:#10b981;">Successfully Authenticated</h1>
-			<p>Account <b>%s</b> added to Antigravity pool.</p>
-			<p style="color:#8b9bb4;margin-top:1rem;">You may now close this window.</p>
-			<script>setTimeout(() => window.location.href='http://localhost:8964/', 2000);</script>
+			<p>Account <b>%s</b> added to AntiAPI pool.</p>
+			<p style="color:#8b9bb4;margin-top:1rem;">You can now switch back to the AntiAPI app.</p>
+			<script>setTimeout(() => window.location.href='http://127.0.0.1:8964/', 2000);</script>
 		</body></html>`, email)
 
 		log.Printf("[OAuth] Successfully authenticated new account: %s", email)

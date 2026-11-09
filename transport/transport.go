@@ -13,6 +13,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	utls "github.com/refraction-networking/utls"
@@ -24,7 +25,13 @@ func BuildUserAgent() string {
 	if custom := os.Getenv("ANTIGRAVITY_USER_AGENT"); custom != "" {
 		return custom
 	}
-	return fmt.Sprintf("antigravity/hub/2.9.1 %s/%s", runtime.GOOS, runtime.GOARCH)
+	osName := runtime.GOOS
+	arch := runtime.GOARCH
+	if osName == "android" {
+		osName = "linux"
+		arch = "amd64"
+	}
+	return fmt.Sprintf("antigravity/hub/2.9.1 %s/%s", osName, arch)
 }
 
 // SetStandardHeaders applies authentic Antigravity 2.0 / CLI metadata headers
@@ -69,7 +76,7 @@ func NewStealthTransport() http.RoundTripper {
 
 			dialer := &net.Dialer{
 				Timeout:       5 * time.Second,
-				KeepAlive:     30 * time.Second,
+				KeepAlive:     15 * time.Second,
 				FallbackDelay: 200 * time.Millisecond,
 			}
 
@@ -120,8 +127,11 @@ func NewStealthTransport() http.RoundTripper {
 
 			return uConn, nil
 		},
-		DisableCompression: false,
-		AllowHTTP:          false,
+		DisableCompression:         false,
+		AllowHTTP:                  false,
+		ReadIdleTimeout:            120 * time.Second,
+		PingTimeout:                5 * time.Second,
+		StrictMaxConcurrentStreams: false,
 	}
 
 	st.h1Transport = &http.Transport{
@@ -188,10 +198,77 @@ func (st *StealthTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	return st.h1Transport.RoundTrip(req)
 }
 
-// NewClient returns a configured http.Client with Chrome TLS emulation and timeout
+var (
+	sharedTransport     http.RoundTripper
+	sharedTransportOnce sync.Once
+
+	accountTransportsMu sync.RWMutex
+	accountTransports   = make(map[string]http.RoundTripper)
+)
+
+// GetAccountTransport returns an isolated StealthTransport instance per account
+// so different Google accounts never multiplex over the same HTTP/2 TCP connection.
+func GetAccountTransport(accountID string) http.RoundTripper {
+	if accountID == "" {
+		return GetSharedTransport()
+	}
+	accountTransportsMu.RLock()
+	t, ok := accountTransports[accountID]
+	accountTransportsMu.RUnlock()
+	if ok {
+		return t
+	}
+
+	accountTransportsMu.Lock()
+	defer accountTransportsMu.Unlock()
+	if t, ok := accountTransports[accountID]; ok {
+		return t
+	}
+	t = NewStealthTransport()
+	accountTransports[accountID] = t
+	return t
+}
+
+// GetSharedTransport returns a singleton StealthTransport instance so TLS
+// handshakes and HTTP/2 multiplexed connections are amortized across all requests.
+func GetSharedTransport() http.RoundTripper {
+	sharedTransportOnce.Do(func() {
+		sharedTransport = NewStealthTransport()
+	})
+	return sharedTransport
+}
+
+// NewClient returns a configured http.Client with Chrome TLS emulation and timeout,
+// backed by the shared persistent StealthTransport connection pool.
 func NewClient(timeout time.Duration) *http.Client {
 	return &http.Client{
-		Transport: NewStealthTransport(),
+		Transport: GetSharedTransport(),
 		Timeout:   timeout,
 	}
+}
+
+// NewAccountClient returns an http.Client backed by an isolated StealthTransport
+// specific to the given account ID, preventing cross-account HTTP/2 stream multiplexing.
+func NewAccountClient(accountID string, timeout time.Duration) *http.Client {
+	return &http.Client{
+		Transport: GetAccountTransport(accountID),
+		Timeout:   timeout,
+	}
+}
+
+// PrewarmConnection proactively initiates an HTTP/2 handshake in the background
+// so the initial user completion has zero TLS handshake latency.
+func PrewarmConnection(baseURL string) {
+	go func() {
+		client := NewClient(5 * time.Second)
+		req, err := http.NewRequest(http.MethodHead, baseURL, nil)
+		if err != nil {
+			return
+		}
+		SetStandardHeaders(req, "")
+		resp, err := client.Do(req)
+		if err == nil && resp != nil {
+			_ = resp.Body.Close()
+		}
+	}()
 }

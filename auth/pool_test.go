@@ -127,3 +127,46 @@ func TestPoolConcurrentAccess(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestPoolSessionStickyAffinity(t *testing.T) {
+	tempDir := t.TempDir()
+	storagePath := filepath.Join(tempDir, "accounts.json")
+
+	pool := &AccountPool{
+		storagePath:     storagePath,
+		sessionBindings: make(map[string]sessionBinding),
+		accounts: []*Account{
+			{ID: "acc1", Email: "acc1@test.com", RefreshToken: "tok1", ProjectID: "proj1"},
+			{ID: "acc2", Email: "acc2@test.com", RefreshToken: "tok2", ProjectID: "proj2"},
+		},
+	}
+
+	sessionKey := "chat-session-uuid-12345"
+
+	// First call binds session to an account
+	acc1, err := pool.GetAccountForSession(sessionKey)
+	if err != nil {
+		t.Fatalf("unexpected error on first call: %v", err)
+	}
+
+	// Repeat calls for 5 turns in this session MUST return the exact same account
+	for turn := 2; turn <= 5; turn++ {
+		accNext, err := pool.GetAccountForSession(sessionKey)
+		if err != nil {
+			t.Fatalf("turn %d: unexpected error: %v", turn, err)
+		}
+		if accNext.Email != acc1.Email {
+			t.Errorf("turn %d: expected sticky account %s, got %s", turn, acc1.Email, accNext.Email)
+		}
+	}
+
+	// When account is excluded (e.g. 429 quota exhaustion), it must failover to acc2
+	exclude := map[string]bool{acc1.Email: true}
+	accFailover, err := pool.GetAccountForSession(sessionKey, exclude)
+	if err != nil {
+		t.Fatalf("unexpected error on failover: %v", err)
+	}
+	if accFailover.Email == acc1.Email {
+		t.Errorf("expected failover to different account, got %s", accFailover.Email)
+	}
+}

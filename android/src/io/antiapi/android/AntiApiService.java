@@ -104,8 +104,11 @@ public class AntiApiService extends Service {
             List<String> cmd = new ArrayList<>();
             cmd.add(bin.getAbsolutePath());
             cmd.add("--no-tui");
-            if (cfBin.exists()) {
-                cmd.add("--tunnel");
+
+            boolean fastMode = getSharedPreferences("antiapi_prefs", Context.MODE_PRIVATE)
+                    .getBoolean("fast_mode", false);
+            if (fastMode) {
+                cmd.add("--fast-mode");
             }
 
             ProcessBuilder pb = new ProcessBuilder(cmd);
@@ -113,6 +116,9 @@ public class AntiApiService extends Service {
             env.put("HOME", getFilesDir().getAbsolutePath());
             env.put("SSL_CERT_DIR", "/system/etc/security/cacerts");
             env.put("ANTIAPI_STORAGE_PATH", new File(getFilesDir(), ".antigravity-api/accounts.json").getAbsolutePath());
+            if (fastMode) {
+                env.put("ANTIAPI_FAST_MODE", "1");
+            }
             if (cfBin.exists()) {
                 env.put("ANTIAPI_CLOUDFLARED_PATH", cfBin.getAbsolutePath());
                 String curPath = System.getenv("PATH");
@@ -132,25 +138,35 @@ public class AntiApiService extends Service {
             appendLog("[System] AntiAPI process launched (PID: " + bin.getName() + ")");
 
             Thread pollThread = new Thread(() -> {
-                while (isRunning && (publicTunnelUrl == null || publicTunnelUrl.isEmpty())) {
+                while (isRunning) {
                     try {
-                        Thread.sleep(2000);
-                        java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL("http://127.0.0.1:8964/quota").openConnection();
-                        conn.setConnectTimeout(1000);
-                        conn.setReadTimeout(1000);
+                        Thread.sleep(3000);
+                        if (!isRunning) break;
+                        java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL("http://127.0.0.1:8964/api/status").openConnection();
+                        conn.setConnectTimeout(1500);
+                        conn.setReadTimeout(1500);
                         if (conn.getResponseCode() == 200) {
                             try (BufferedReader r = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
-                                String body = r.readLine();
-                                if (body != null && body.contains("\"public_url\":\"https://") && !body.contains("api.trycloudflare.com")) {
+                                StringBuilder sb = new StringBuilder();
+                                String l;
+                                while ((l = r.readLine()) != null) sb.append(l);
+                                String body = sb.toString();
+                                String resolved = "";
+                                if (body.contains("\"public_url\":\"https://") && !body.contains("api.trycloudflare.com")) {
                                     int s = body.indexOf("\"public_url\":\"") + 14;
                                     int e = body.indexOf("\"", s);
                                     if (e > s) {
-                                        String resolved = body.substring(s, e);
-                                        publicTunnelUrl = resolved;
-                                        updateNotification("AntiAPI: " + resolved);
-                                        notifyTunnelUrl(resolved);
-                                        break;
+                                        resolved = body.substring(s, e);
                                     }
+                                }
+                                if (!resolved.equals(publicTunnelUrl)) {
+                                    publicTunnelUrl = resolved;
+                                    if (!resolved.isEmpty()) {
+                                        updateNotification("AntiAPI: " + resolved);
+                                    } else {
+                                        updateNotification("AntiAPI running on :8964");
+                                    }
+                                    notifyTunnelUrl(resolved);
                                 }
                             }
                         }
@@ -188,6 +204,8 @@ public class AntiApiService extends Service {
             Log.e(TAG, "Process error", e);
         } finally {
             isRunning = false;
+            publicTunnelUrl = "";
+            notifyTunnelUrl("");
             notifyStatus(false);
             if (wakeLock != null && wakeLock.isHeld()) {
                 wakeLock.release();
@@ -205,6 +223,8 @@ public class AntiApiService extends Service {
             serverProcess = null;
         }
         isRunning = false;
+        publicTunnelUrl = "";
+        notifyTunnelUrl("");
         notifyStatus(false);
         if (wakeLock != null && wakeLock.isHeld()) {
             wakeLock.release();

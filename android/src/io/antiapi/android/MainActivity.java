@@ -45,8 +45,6 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
 
     // Top Header Views
     private TextView tvHeaderStatus;
-    private Button btnRefresh;
-    private Button btnHeaderToggle;
 
     // Tab Bar Buttons
     private Button btnTabGateway;
@@ -63,17 +61,26 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
     private TextView tvEndpoint;
     private Button btnCopyLocal;
     private TextView tvPublicUrl;
+    private TextView tvTunnelBadge;
+    private Button btnToggleTunnel;
     private Button btnCopyPublic;
     private Button btnSharePublic;
+    private TextView tvFastModeStatus;
+    private TextView tvFastModeBadge;
+    private Button btnToggleFastMode;
     private Button btnCopyEnv;
     private Button btnCopyCurl;
     private Button btnToggle;
+    private boolean isFastMode = false;
+    private boolean isTunnelActive = false;
+    private boolean isTunnelStarting = false;
 
     // Quotas Tab Views
     private TextView tvAccountsSummary;
     private Button btnSyncQuotas;
     private LinearLayout llAccountChips;
     private TextView tvSelectedAccountEmail;
+    private TextView tvSelectedAccountSeparator;
     private TextView tvSelectedAccountProject;
     private TextView tvSelectedAccountStatus;
     private Button btnRemoveAccount;
@@ -128,11 +135,15 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
         setupListeners();
         switchTab(TAB_GATEWAY);
 
+        boolean initialFastMode = getSharedPreferences("antiapi_prefs", Context.MODE_PRIVATE)
+                .getBoolean("fast_mode", false);
+        isFastMode = initialFastMode;
+        updateFastModeUI(isFastMode);
+        updateTunnelUI(false, false, "");
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 101);
         }
-
-        startDaemonService();
     }
 
     private void setupWindowInsets() {
@@ -219,8 +230,6 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
 
     private void initViews() {
         tvHeaderStatus = findViewById(R.id.tv_header_status);
-        btnRefresh = findViewById(R.id.btn_refresh);
-        btnHeaderToggle = findViewById(R.id.btn_header_toggle);
 
         btnTabGateway = findViewById(R.id.btn_tab_gateway);
         btnTabQuotas = findViewById(R.id.btn_tab_quotas);
@@ -234,8 +243,13 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
         tvEndpoint = findViewById(R.id.tv_endpoint);
         btnCopyLocal = findViewById(R.id.btn_copy_local);
         tvPublicUrl = findViewById(R.id.tv_public_url);
+        tvTunnelBadge = findViewById(R.id.tv_tunnel_badge);
+        btnToggleTunnel = findViewById(R.id.btn_toggle_tunnel);
         btnCopyPublic = findViewById(R.id.btn_copy_public);
         btnSharePublic = findViewById(R.id.btn_share_public);
+        tvFastModeStatus = findViewById(R.id.tv_fast_mode_status);
+        tvFastModeBadge = findViewById(R.id.tv_fast_mode_badge);
+        btnToggleFastMode = findViewById(R.id.btn_toggle_fast_mode);
         btnCopyEnv = findViewById(R.id.btn_copy_env);
         btnCopyCurl = findViewById(R.id.btn_copy_curl);
         btnToggle = findViewById(R.id.btn_toggle);
@@ -244,6 +258,7 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
         btnSyncQuotas = findViewById(R.id.btn_sync_quotas);
         llAccountChips = findViewById(R.id.ll_account_chips);
         tvSelectedAccountEmail = findViewById(R.id.tv_selected_account_email);
+        tvSelectedAccountSeparator = findViewById(R.id.tv_selected_account_separator);
         tvSelectedAccountProject = findViewById(R.id.tv_selected_account_project);
         tvSelectedAccountStatus = findViewById(R.id.tv_selected_account_status);
         btnRemoveAccount = findViewById(R.id.btn_remove_account);
@@ -273,23 +288,20 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
         });
         btnTabLogs.setOnClickListener(v -> switchTab(TAB_LOGS));
 
-        btnHeaderToggle.setOnClickListener(v -> toggleServer());
         btnToggle.setOnClickListener(v -> toggleServer());
 
-        btnRefresh.setOnClickListener(v -> {
-            fetchQuotasAsync();
-            Toast.makeText(this, "Telemetry synchronized", Toast.LENGTH_SHORT).show();
-        });
+        btnToggleTunnel.setOnClickListener(v -> toggleTunnel());
+        btnToggleFastMode.setOnClickListener(v -> toggleFastMode());
 
-        btnSyncQuotas.setOnClickListener(v -> fetchQuotasAsync());
+        btnSyncQuotas.setOnClickListener(v -> triggerRefreshAll());
 
         btnOauthLogin.setOnClickListener(v -> {
-            try {
-                Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("http://127.0.0.1:8964/oauth/login"));
-                startActivity(browserIntent);
-                Toast.makeText(this, "Opening Google sign-in in browser...", Toast.LENGTH_SHORT).show();
-            } catch (Exception e) {
-                Toast.makeText(this, "Could not open browser: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            if (apiService == null || !apiService.isRunning()) {
+                startDaemonService();
+                Toast.makeText(this, "Starting gateway service for Google OAuth...", Toast.LENGTH_SHORT).show();
+                pollAndLaunchOAuthBrowser(0);
+            } else {
+                launchOAuthBrowser();
             }
         });
 
@@ -368,9 +380,11 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
         if (selected) {
             btn.setBackgroundResource(R.drawable.tab_active_bg);
             btn.setTextColor(Color.parseColor("#F8FAFC"));
+            btn.setTypeface(null, android.graphics.Typeface.BOLD);
         } else {
             btn.setBackgroundResource(R.drawable.tab_inactive_bg);
             btn.setTextColor(Color.parseColor("#94A3B8"));
+            btn.setTypeface(null, android.graphics.Typeface.NORMAL);
         }
     }
 
@@ -393,6 +407,15 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
                 br.close();
 
                 JSONObject statusJson = new JSONObject(sb.toString());
+                final boolean fastModeServer = statusJson.optBoolean("fast_mode", false);
+                boolean tActive = statusJson.optBoolean("tunnel_active", false);
+                final boolean tStarting = statusJson.optBoolean("tunnel_starting", false);
+                final String pubUrl = statusJson.optString("public_url", "");
+                if (pubUrl != null && !pubUrl.isEmpty() && !pubUrl.contains("api.trycloudflare.com")) {
+                    tActive = true;
+                }
+                final boolean tunnelActiveFinal = tActive;
+
                 JSONArray accountsArr = statusJson.optJSONArray("accounts");
                 String activeAccount = statusJson.optString("selected_account", "");
                 JSONObject quotaSummaries = statusJson.optJSONObject("quota_summaries");
@@ -436,6 +459,10 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
                 }
 
                 runOnUiThread(() -> {
+                    isFastMode = fastModeServer;
+                    updateFastModeUI(isFastMode);
+                    updateTunnelUI(tunnelActiveFinal, tStarting, pubUrl);
+
                     accountList.clear();
                     accountList.addAll(newAccounts);
                     accountQuotaMap.clear();
@@ -444,7 +471,7 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
                     accountMetaMap.putAll(metaMap);
 
                     if (tvAccountsSummary != null) {
-                        tvAccountsSummary.setText(accountList.size() + " account(s) loaded · Tap account to view individual quota");
+                        tvAccountsSummary.setText(accountList.size() + (accountList.size() == 1 ? " account" : " accounts"));
                     }
 
                     renderAccountChips();
@@ -462,9 +489,14 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
                     if (!currentSelectedAccount.isEmpty()) {
                         selectAccount(currentSelectedAccount);
                     } else {
+                        if (tvAccountsSummary != null) tvAccountsSummary.setText("0 accounts");
                         if (tvSelectedAccountEmail != null) tvSelectedAccountEmail.setText("No accounts configured");
-                        if (tvSelectedAccountProject != null) tvSelectedAccountProject.setText("Add an account below to begin");
-                        if (tvSelectedAccountStatus != null) tvSelectedAccountStatus.setText("Status: Offline");
+                        if (tvSelectedAccountSeparator != null) tvSelectedAccountSeparator.setVisibility(View.GONE);
+                        if (tvSelectedAccountProject != null) tvSelectedAccountProject.setVisibility(View.GONE);
+                        if (tvSelectedAccountStatus != null) {
+                            tvSelectedAccountStatus.setText("Offline");
+                            tvSelectedAccountStatus.setTextColor(Color.parseColor("#EF4444"));
+                        }
                     }
                 });
 
@@ -482,18 +514,22 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
             chip.setTextSize(11f);
             chip.setAllCaps(false);
             chip.setSingleLine(true);
-            chip.setPadding(dpToPx(12), dpToPx(4), dpToPx(12), dpToPx(4));
+            chip.setStateListAnimator(null);
+            chip.setMinWidth(0);
+            chip.setMinHeight(0);
+            chip.setPadding(dpToPx(10), dpToPx(4), dpToPx(10), dpToPx(4));
 
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
-                    dpToPx(32)
+                    dpToPx(28)
             );
-            lp.setMargins(0, 0, dpToPx(8), 0);
+            lp.setMargins(0, 0, dpToPx(6), 0);
             chip.setLayoutParams(lp);
 
             boolean isSelected = email.equals(currentSelectedAccount);
             chip.setBackgroundResource(isSelected ? R.drawable.chip_active_bg : R.drawable.chip_inactive_bg);
             chip.setTextColor(isSelected ? Color.parseColor("#38BDF8") : Color.parseColor("#94A3B8"));
+            chip.setTypeface(null, isSelected ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
 
             chip.setOnClickListener(v -> selectAccount(email));
             llAccountChips.addView(chip);
@@ -512,17 +548,24 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
         String project = (meta != null) ? meta.optString("projectId", "--") : "--";
         boolean rateLimited = (meta != null) && meta.optBoolean("isRateLimited", false);
 
-        if (tvSelectedAccountProject != null) {
-            tvSelectedAccountProject.setText("Project: " + (project.isEmpty() ? "Default" : project));
+        if (tvSelectedAccountProject != null && tvSelectedAccountSeparator != null) {
+            if (project == null || project.isEmpty() || "--".equals(project) || "aicode-consumers".equalsIgnoreCase(project) || "default".equalsIgnoreCase(project)) {
+                tvSelectedAccountSeparator.setVisibility(View.GONE);
+                tvSelectedAccountProject.setVisibility(View.GONE);
+            } else {
+                tvSelectedAccountSeparator.setVisibility(View.VISIBLE);
+                tvSelectedAccountProject.setVisibility(View.VISIBLE);
+                tvSelectedAccountProject.setText("Project: " + project);
+            }
         }
 
         if (tvSelectedAccountStatus != null) {
             if (rateLimited) {
                 String until = meta.optString("rateLimitedUntil", "");
-                tvSelectedAccountStatus.setText("Status: Rate Limited (" + until + ")");
+                tvSelectedAccountStatus.setText("Rate Limited (" + until + ")");
                 tvSelectedAccountStatus.setTextColor(Color.parseColor("#EF4444"));
             } else {
-                tvSelectedAccountStatus.setText("Status: Active · Ready");
+                tvSelectedAccountStatus.setText("Active · Ready");
                 tvSelectedAccountStatus.setTextColor(Color.parseColor("#10B981"));
             }
         }
@@ -646,6 +689,160 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
         }).start();
     }
 
+    private void updateFastModeUI(boolean enabled) {
+        if (tvFastModeBadge != null) {
+            tvFastModeBadge.setText(enabled ? "ENABLED" : "DISABLED");
+            tvFastModeBadge.setBackgroundResource(enabled ? R.drawable.badge_running_bg : R.drawable.badge_stopped_bg);
+            tvFastModeBadge.setTextColor(Color.parseColor(enabled ? "#10B981" : "#EF4444"));
+        }
+        if (tvFastModeStatus != null) {
+            tvFastModeStatus.setText(enabled ? "Fast Mode: Enabled (Zero-thinking budget)" : "Fast Mode: Disabled (Standard thinking enabled)");
+            tvFastModeStatus.setTextColor(Color.parseColor(enabled ? "#34D399" : "#CBD5E1"));
+        }
+        if (btnToggleFastMode != null) {
+            btnToggleFastMode.setText(enabled ? "Disable Fast Mode" : "Enable Fast Mode");
+            btnToggleFastMode.setBackgroundResource(enabled ? R.drawable.btn_danger_bg : R.drawable.btn_secondary_bg);
+            btnToggleFastMode.setTextColor(Color.parseColor(enabled ? "#FFFFFF" : "#F8FAFC"));
+        }
+    }
+
+    private void updateTunnelUI(boolean active, boolean starting, String url) {
+        this.isTunnelActive = active;
+        this.isTunnelStarting = starting;
+        if (url != null && !url.isEmpty()) {
+            this.currentTunnelUrl = url;
+        }
+
+        if (tvTunnelBadge != null) {
+            if (active) {
+                tvTunnelBadge.setText("ACTIVE");
+                tvTunnelBadge.setBackgroundResource(R.drawable.badge_running_bg);
+                tvTunnelBadge.setTextColor(Color.parseColor("#10B981"));
+            } else if (starting) {
+                tvTunnelBadge.setText("STARTING");
+                tvTunnelBadge.setBackgroundResource(R.drawable.badge_stopped_bg);
+                tvTunnelBadge.setTextColor(Color.parseColor("#FBBF24"));
+            } else {
+                tvTunnelBadge.setText("OFFLINE");
+                tvTunnelBadge.setBackgroundResource(R.drawable.badge_stopped_bg);
+                tvTunnelBadge.setTextColor(Color.parseColor("#EF4444"));
+            }
+        }
+
+        if (btnToggleTunnel != null) {
+            if (active) {
+                btnToggleTunnel.setText("Stop Tunnel");
+                btnToggleTunnel.setBackgroundResource(R.drawable.btn_danger_bg);
+                btnToggleTunnel.setTextColor(Color.parseColor("#FFFFFF"));
+            } else if (starting) {
+                btnToggleTunnel.setText("Starting...");
+                btnToggleTunnel.setBackgroundResource(R.drawable.btn_secondary_bg);
+                btnToggleTunnel.setTextColor(Color.parseColor("#FBBF24"));
+            } else {
+                btnToggleTunnel.setText("Start Tunnel");
+                btnToggleTunnel.setBackgroundResource(R.drawable.btn_secondary_bg);
+                btnToggleTunnel.setTextColor(Color.parseColor("#F8FAFC"));
+            }
+        }
+
+        if (tvPublicUrl != null) {
+            if (active && !currentTunnelUrl.isEmpty()) {
+                String full = currentTunnelUrl.endsWith("/v1") ? currentTunnelUrl : currentTunnelUrl + "/v1";
+                tvPublicUrl.setText("Public Tunnel:\n" + full);
+                tvPublicUrl.setTextColor(Color.parseColor("#34D399"));
+            } else if (starting) {
+                tvPublicUrl.setText("Public Tunnel: Connecting...");
+                tvPublicUrl.setTextColor(Color.parseColor("#FBBF24"));
+            } else {
+                tvPublicUrl.setText("Public Tunnel: Offline");
+                tvPublicUrl.setTextColor(Color.parseColor("#94A3B8"));
+            }
+        }
+    }
+
+    private void toggleFastMode() {
+        final boolean nextState = !isFastMode;
+        getSharedPreferences("antiapi_prefs", Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean("fast_mode", nextState)
+                .apply();
+        isFastMode = nextState;
+        updateFastModeUI(isFastMode);
+
+        new Thread(() -> {
+            try {
+                URL url = new URL("http://127.0.0.1:8964/api/fast_mode");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setDoOutput(true);
+                conn.setConnectTimeout(2000);
+                conn.setReadTimeout(2000);
+
+                JSONObject payload = new JSONObject();
+                payload.put("fast_mode", nextState);
+                byte[] bytes = payload.toString().getBytes("UTF-8");
+                conn.getOutputStream().write(bytes);
+                int code = conn.getResponseCode();
+                if (code == 200) {
+                    runOnUiThread(() -> Toast.makeText(MainActivity.this,
+                            "Fast Mode: " + (nextState ? "Enabled (Zero Thinking)" : "Disabled (Standard Thinking)"),
+                            Toast.LENGTH_SHORT).show());
+                }
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(MainActivity.this,
+                        "Fast Mode saved (" + (nextState ? "ON" : "OFF") + ")",
+                        Toast.LENGTH_SHORT).show());
+            }
+        }).start();
+    }
+
+    private void toggleTunnel() {
+        if (apiService == null || !apiService.isRunning()) {
+            Toast.makeText(this, "Start Gateway Service first before enabling tunnel", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Toast.makeText(this, isTunnelActive ? "Stopping Cloudflare tunnel..." : "Starting Cloudflare tunnel...", Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            try {
+                URL url = new URL("http://127.0.0.1:8964/api/tunnel");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setDoOutput(true);
+                conn.setConnectTimeout(3000);
+                conn.setReadTimeout(3000);
+
+                JSONObject payload = new JSONObject();
+                payload.put("toggle", true);
+                byte[] bytes = payload.toString().getBytes("UTF-8");
+                conn.getOutputStream().write(bytes);
+                conn.getResponseCode();
+            } catch (Exception ignored) {}
+
+            try {
+                Thread.sleep(1500);
+            } catch (InterruptedException ignored) {}
+            fetchQuotasAsync();
+        }).start();
+    }
+
+    private void triggerRefreshAll() {
+        Toast.makeText(this, "Refreshing quotas & clearing cooldowns...", Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            try {
+                URL url = new URL("http://127.0.0.1:8964/api/refresh");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("POST");
+                conn.setConnectTimeout(2500);
+                conn.setReadTimeout(2500);
+                conn.getResponseCode();
+            } catch (Exception ignored) {}
+            fetchQuotasAsync();
+        }).start();
+    }
+
     private int dpToPx(int dp) {
         return (int) (dp * getResources().getDisplayMetrics().density + 0.5f);
     }
@@ -718,6 +915,47 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
         }
     }
 
+    private void pollAndLaunchOAuthBrowser(int attempt) {
+        new Thread(() -> {
+            boolean ready = false;
+            try {
+                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL("http://127.0.0.1:8964/health").openConnection();
+                conn.setConnectTimeout(600);
+                conn.setReadTimeout(600);
+                ready = (conn.getResponseCode() == 200);
+                conn.disconnect();
+            } catch (Exception ignored) {}
+
+            if (ready || attempt >= 12) {
+                runOnUiThread(this::launchOAuthBrowser);
+            } else {
+                try {
+                    Thread.sleep(350);
+                } catch (InterruptedException ignored) {}
+                pollAndLaunchOAuthBrowser(attempt + 1);
+            }
+        }).start();
+    }
+
+    private void launchOAuthBrowser() {
+        try {
+            Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("http://127.0.0.1:8964/oauth/login"));
+            startActivity(browserIntent);
+            Toast.makeText(this, "Opening Google sign-in in browser...", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "Could not open browser: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (apiService != null && apiService.isRunning()) {
+            fetchQuotasAsync();
+            mainHandler.postDelayed(this::fetchQuotasAsync, 1200);
+        }
+    }
+
     @Override
     protected void onStart() {
         super.onStart();
@@ -755,8 +993,6 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
             if (running) {
                 tvHeaderStatus.setText("● Running :8964");
                 tvHeaderStatus.setTextColor(Color.parseColor("#34D399"));
-                btnHeaderToggle.setText("Stop");
-                btnHeaderToggle.setBackgroundResource(R.drawable.btn_danger_bg);
 
                 tvStatus.setText("Status: Running on :8964");
                 tvStatus.setTextColor(Color.parseColor("#34D399"));
@@ -764,15 +1000,14 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
                 btnToggle.setBackgroundResource(R.drawable.btn_danger_bg);
 
                 if (currentTunnelUrl.isEmpty()) {
-                    tvPublicUrl.setText("Public Tunnel: Connecting...");
-                    tvPublicUrl.setTextColor(Color.parseColor("#FBBF24"));
+                    tvPublicUrl.setText("Public Tunnel: Offline");
+                    tvPublicUrl.setTextColor(Color.parseColor("#94A3B8"));
+                    updateTunnelUI(false, false, "");
                 }
                 fetchQuotasAsync();
             } else {
                 tvHeaderStatus.setText("● Stopped");
                 tvHeaderStatus.setTextColor(Color.parseColor("#EF4444"));
-                btnHeaderToggle.setText("Start");
-                btnHeaderToggle.setBackgroundResource(R.drawable.btn_success_bg);
 
                 tvStatus.setText("Status: Stopped");
                 tvStatus.setTextColor(Color.parseColor("#EF4444"));
@@ -780,8 +1015,9 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
                 btnToggle.setBackgroundResource(R.drawable.btn_success_bg);
 
                 tvPublicUrl.setText("Public Tunnel: Offline");
-                tvPublicUrl.setTextColor(Color.parseColor("#64748B"));
+                tvPublicUrl.setTextColor(Color.parseColor("#94A3B8"));
                 currentTunnelUrl = "";
+                updateTunnelUI(false, false, "");
             }
         });
     }
@@ -789,11 +1025,8 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
     @Override
     public void onTunnelUrl(final String url) {
         runOnUiThread(() -> {
-            currentTunnelUrl = url;
-            if (tvPublicUrl != null) {
-                tvPublicUrl.setText("Public Tunnel:\n" + url + "/v1");
-                tvPublicUrl.setTextColor(Color.parseColor("#34D399"));
-            }
+            boolean active = url != null && !url.isEmpty() && !url.contains("api.trycloudflare.com");
+            updateTunnelUI(active, false, url);
         });
     }
 }

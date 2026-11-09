@@ -35,20 +35,26 @@ func TestModelResolution(t *testing.T) {
 	}
 }
 
-func TestCuratedModelsContainsMedium(t *testing.T) {
+func TestCuratedModelsCanonical(t *testing.T) {
 	reg := GetRegistry()
 	models := reg.GetAllModels()
 
-	foundMedium := false
+	foundCanonical := false
 	for _, m := range models {
-		if m.ID == "gemini-3.8-flash-medium" {
-			foundMedium = true
+		if m.ID == "gemini-3.8-flash" {
+			foundCanonical = true
+			if m.ContextWindow != 1048576 {
+				t.Errorf("expected 1048576 context window for gemini-3.8-flash, got %d", m.ContextWindow)
+			}
+			if m.MaxOutputTokens != 65536 {
+				t.Errorf("expected 65536 max output tokens for gemini-3.8-flash, got %d", m.MaxOutputTokens)
+			}
 			break
 		}
 	}
 
-	if !foundMedium {
-		t.Fatalf("expected gemini-3.8-flash-medium in GetAllModels(), but not found")
+	if !foundCanonical {
+		t.Fatalf("expected gemini-3.8-flash in GetAllModels(), but not found")
 	}
 }
 
@@ -57,8 +63,7 @@ func TestCuratedModelsContextLimits(t *testing.T) {
 	models := reg.GetAllModels()
 
 	expectedCanonical := map[string]int{
-		"gemini-3.8-flash":      1048576,
-		"gemini-3.8-flash-high": 1048576,
+		"gemini-3.8-flash": 1048576,
 	}
 
 	for id, expectedCtx := range expectedCanonical {

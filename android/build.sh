@@ -17,8 +17,7 @@ rm -rf build
 mkdir -p build/obj build/lib/arm64-v8a assets
 
 echo "==> Preparing native arm64 binaries (ponytail optimized)..."
-(cd .. && CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -trimpath -ldflags="-s -w -buildid=" -o antiapi-arm64 .)
-cp ../antiapi-arm64 build/lib/arm64-v8a/libantiapi.so
+(cd "$DIR" && CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -trimpath -ldflags="-s -w -buildid=" -o build/lib/arm64-v8a/libantiapi.so ./cmd/main.go)
 rm -f assets/antiapi
 
 CF_BIN="$HOME/.cache/antiapi/libcloudflared.so"

@@ -9,7 +9,7 @@ import (
 type StealthTransport = transport.StealthTransport
 
 func NewStealthTransport() http.RoundTripper {
-	return transport.NewStealthTransport()
+	return transport.GetSharedTransport()
 }
 
 func BuildUserAgent() string {

@@ -770,3 +770,153 @@ func TestConvertOpenAIToGoogleWithSanitizedTools(t *testing.T) {
 		t.Errorf("expected inferred type string")
 	}
 }
+
+func BenchmarkFormatOpenAIChunk(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = FormatOpenAIChunk("chatcmpl-test-12345", "gemini-3.8-flash-high", "Hello world this is a streaming token test.", "", "", nil)
+	}
+}
+
+func BenchmarkParseGoogleSSEChunk(b *testing.B) {
+	raw := []byte(`{"response":{"candidates":[{"content":{"parts":[{"text":"Hello world"}]}}]}}`)
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = ParseGoogleSSEChunk(raw)
+	}
+}
+
+func TestFastModeLogic(t *testing.T) {
+	SetGlobalFastMode(false)
+	defer SetGlobalFastMode(false)
+
+	// 1. Default request: No thinking config by default on standard model
+	reqDefault := &OpenAIChatRequest{
+		Model:    "gemini-3.8-flash",
+		Messages: []OpenAIMessage{{Role: "user", Content: "hi"}},
+	}
+	gReq, _ := ConvertOpenAIToGoogle(reqDefault)
+	if _, ok := gReq.Request.GenerationConfig["thinkingConfig"]; ok {
+		t.Fatalf("expected no thinkingConfig for default request, got %v", gReq.Request.GenerationConfig["thinkingConfig"])
+	}
+
+	// 2. Explicit FastMode in request
+	fastTrue := true
+	reqFast := &OpenAIChatRequest{
+		Model:    "gemini-3.8-flash",
+		Messages: []OpenAIMessage{{Role: "user", Content: "hi"}},
+		FastMode: &fastTrue,
+	}
+	gReq, _ = ConvertOpenAIToGoogle(reqFast)
+	tc, ok := gReq.Request.GenerationConfig["thinkingConfig"].(map[string]any)
+	if !ok || tc["thinkingBudget"] != 0 {
+		t.Fatalf("expected thinkingBudget == 0 for FastMode=true, got %v", tc)
+	}
+	if gReq.Request.SystemInstruction == nil || len(gReq.Request.SystemInstruction.Parts) == 0 {
+		t.Fatalf("expected SystemInstruction with fast directive for FastMode=true")
+	}
+	sysText := gReq.Request.SystemInstruction.Parts[len(gReq.Request.SystemInstruction.Parts)-1].Text
+	if !strings.Contains(sysText, "Respond immediately and concisely") {
+		t.Fatalf("expected fast directive in SystemInstruction, got %q", sysText)
+	}
+
+	// 3. Global FastMode enabled
+	SetGlobalFastMode(true)
+	reqUnderGlobal := &OpenAIChatRequest{
+		Model:    "gemini-3.8-flash",
+		Messages: []OpenAIMessage{{Role: "user", Content: "hi"}},
+	}
+	gReq, _ = ConvertOpenAIToGoogle(reqUnderGlobal)
+	tc, ok = gReq.Request.GenerationConfig["thinkingConfig"].(map[string]any)
+	if !ok || tc["thinkingBudget"] != 0 {
+		t.Fatalf("expected thinkingBudget == 0 when GlobalFastMode is true, got %v", tc)
+	}
+
+	// 4. Global FastMode overridden by request FastMode=false
+	fastFalse := false
+	reqOverride := &OpenAIChatRequest{
+		Model:    "gemini-3.8-flash",
+		Messages: []OpenAIMessage{{Role: "user", Content: "hi"}},
+		FastMode: &fastFalse,
+	}
+	gReq, _ = ConvertOpenAIToGoogle(reqOverride)
+	if _, ok := gReq.Request.GenerationConfig["thinkingConfig"]; ok {
+		t.Fatalf("expected thinkingConfig omitted when request explicitly sets FastMode=false, got %v", gReq.Request.GenerationConfig["thinkingConfig"])
+	}
+
+	SetGlobalFastMode(false)
+
+	// 5. Reasoning effort 'none'
+	reqReasoningNone := &OpenAIChatRequest{
+		Model:           "gemini-3.8-flash",
+		Messages:        []OpenAIMessage{{Role: "user", Content: "hi"}},
+		ReasoningEffort: "none",
+	}
+	gReq, _ = ConvertOpenAIToGoogle(reqReasoningNone)
+	tc, ok = gReq.Request.GenerationConfig["thinkingConfig"].(map[string]any)
+	if !ok || tc["thinkingBudget"] != 0 {
+		t.Fatalf("expected thinkingBudget == 0 for reasoning_effort='none', got %v", tc)
+	}
+
+	// 6. Fast alias model 'gemini-3.8-flash-fast'
+	reqAliasFast := &OpenAIChatRequest{
+		Model:    "gemini-3.8-flash-fast",
+		Messages: []OpenAIMessage{{Role: "user", Content: "hi"}},
+	}
+	gReq, _ = ConvertOpenAIToGoogle(reqAliasFast)
+	tc, ok = gReq.Request.GenerationConfig["thinkingConfig"].(map[string]any)
+	if !ok || tc["thinkingBudget"] != 0 {
+		t.Fatalf("expected thinkingBudget == 0 for model 'gemini-3.8-flash-fast', got %v", tc)
+	}
+
+	// 7. Claude request with fast_mode
+	cReqFast := &ClaudeRequest{
+		Model:    "claude-3-7-sonnet",
+		Messages: []ClaudeMessage{{Role: "user", Content: "hi"}},
+		FastMode: &fastTrue,
+	}
+	gReqClaude, _ := ConvertClaudeToGoogle(cReqFast)
+	tc, ok = gReqClaude.Request.GenerationConfig["thinkingConfig"].(map[string]any)
+	if !ok || tc["thinkingBudget"] != 0 {
+		t.Fatalf("expected thinkingBudget == 0 for Claude request with FastMode=true, got %v", tc)
+	}
+}
+
+func TestHermesReasoningEffortLevels(t *testing.T) {
+	cases := []struct {
+		effort         string
+		expectedModel  string
+		expectedBudget int
+	}{
+		{"minimal", "gemini-3.8-flash-low", 0},
+		{"none", "gemini-3.8-flash-low", 0},
+		{"low", "gemini-3.8-flash-low", 0},
+		{"med", "gemini-3.8-flash-medium", 512},
+		{"medium", "gemini-3.8-flash-medium", 512},
+		{"high", "gemini-3.8-flash-high", 8192},
+		{"xhigh", "gemini-3.8-flash-high", -1},
+		{"max", "gemini-3.8-flash-high", -1},
+		{"ultra", "gemini-3.8-flash-high", -1},
+	}
+
+	for _, c := range cases {
+		t.Run("effort_"+c.effort, func(t *testing.T) {
+			req := &OpenAIChatRequest{
+				Model:           "gemini-3.8-flash",
+				Messages:        []OpenAIMessage{{Role: "user", Content: "test"}},
+				ReasoningEffort: c.effort,
+			}
+			gReq, resolved := ConvertOpenAIToGoogle(req)
+			if gReq.Model != c.expectedModel {
+				t.Errorf("effort %s: expected model %s, got %s (resolved %s)", c.effort, c.expectedModel, gReq.Model, resolved)
+			}
+			tc, ok := gReq.Request.GenerationConfig["thinkingConfig"].(map[string]any)
+			if !ok {
+				t.Fatalf("effort %s: missing thinkingConfig", c.effort)
+			}
+			if tc["thinkingBudget"] != c.expectedBudget {
+				t.Errorf("effort %s: expected budget %d, got %v", c.effort, c.expectedBudget, tc["thinkingBudget"])
+			}
+		})
+	}
+}

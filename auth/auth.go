@@ -94,8 +94,10 @@ func (tm *TokenManager) AutoDiscover() error {
 		}
 	}
 
-	// 3. Scan Antigravity IDE state database files
+	// 3. Scan Antigravity IDE state database files (Linux & macOS)
 	dbCandidates := []string{
+		filepath.Join(homeDir, "Library", "Application Support", "Antigravity", "User", "globalStorage", "state.vscdb"),
+		filepath.Join(homeDir, "Library", "Application Support", "Code", "User", "globalStorage", "state.vscdb"),
 		filepath.Join(homeDir, ".config", "Antigravity", "User", "globalStorage", "state.vscdb"),
 		filepath.Join(homeDir, ".antigravity-ide", "User", "globalStorage", "state.vscdb"),
 		filepath.Join(homeDir, ".config", "Code", "User", "globalStorage", "state.vscdb"),

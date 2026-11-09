@@ -1,12 +1,15 @@
 package translator
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"antiapi/auth"
@@ -14,13 +17,13 @@ import (
 )
 
 func maxTokensForModel(model string, requested *int) int {
-	maxLimit := 64000
+	maxLimit := 65536
 	if strings.Contains(model, "gpt") {
 		maxLimit = 16384
 	} else if strings.Contains(model, "gemini") {
-		maxLimit = 64000
+		maxLimit = 65536
 	} else if strings.Contains(model, "claude") {
-		maxLimit = 64000
+		maxLimit = 65536
 	}
 	if requested != nil && *requested > 0 && *requested <= maxLimit {
 		return *requested
@@ -46,19 +49,35 @@ type OpenAIToolCall struct {
 	} `json:"function"`
 }
 
+var globalFastMode atomic.Bool
+
+// SetGlobalFastMode enables or disables low-latency fast mode server-wide.
+func SetGlobalFastMode(enabled bool) {
+	globalFastMode.Store(enabled)
+}
+
+// IsGlobalFastMode returns true if low-latency fast mode is enabled server-wide.
+func IsGlobalFastMode() bool {
+	return globalFastMode.Load()
+}
+
 type StreamOptions struct {
 	IncludeUsage bool `json:"include_usage"`
 }
 
 type OpenAIChatRequest struct {
-	Model         string          `json:"model"`
-	Messages      []OpenAIMessage `json:"messages"`
-	Stream        bool            `json:"stream"`
-	StreamOptions *StreamOptions  `json:"stream_options,omitempty"`
-	Temperature   *float64        `json:"temperature,omitempty"`
-	TopP          *float64        `json:"top_p,omitempty"`
-	MaxTokens     *int            `json:"max_tokens,omitempty"`
-	Tools         []any           `json:"tools,omitempty"`
+	Model           string          `json:"model"`
+	Messages        []OpenAIMessage `json:"messages"`
+	Stream          bool            `json:"stream"`
+	StreamOptions   *StreamOptions  `json:"stream_options,omitempty"`
+	Temperature     *float64        `json:"temperature,omitempty"`
+	TopP            *float64        `json:"top_p,omitempty"`
+	MaxTokens       *int            `json:"max_tokens,omitempty"`
+	Tools           []any           `json:"tools,omitempty"`
+	ReasoningEffort string          `json:"reasoning_effort,omitempty"`
+	ThinkingBudget  *int            `json:"thinking_budget,omitempty"`
+	FastMode        *bool           `json:"fast_mode,omitempty"`
+	User            string          `json:"user,omitempty"`
 }
 
 // Anthropic Data Structures
@@ -76,6 +95,9 @@ type ClaudeRequest struct {
 	TopP        *float64        `json:"top_p,omitempty"`
 	MaxTokens   *int            `json:"max_tokens,omitempty"`
 	Tools       []any           `json:"tools,omitempty"`
+	Thinking    map[string]any  `json:"thinking,omitempty"`
+	FastMode    *bool           `json:"fast_mode,omitempty"`
+	Metadata    map[string]any  `json:"metadata,omitempty"`
 }
 
 // Upstream Google Cloud Code Structures
@@ -223,6 +245,81 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 	}
 	if req.TopP != nil {
 		gReq.Request.GenerationConfig["topP"] = *req.TopP
+	}
+
+	var thinkingBudget *int
+	isFast := false
+	if req.FastMode != nil {
+		isFast = *req.FastMode
+	} else if IsGlobalFastMode() {
+		isFast = true
+	} else if strings.HasSuffix(strings.ToLower(req.Model), "-fast") || strings.HasSuffix(strings.ToLower(resolvedModel), "-fast") {
+		isFast = true
+	}
+
+	if isFast {
+		if strings.HasSuffix(resolvedModel, "-high") {
+			resolvedModel = strings.TrimSuffix(resolvedModel, "-high") + "-low"
+			gReq.Model = resolvedModel
+		} else if strings.HasSuffix(resolvedModel, "-medium") {
+			resolvedModel = strings.TrimSuffix(resolvedModel, "-medium") + "-low"
+			gReq.Model = resolvedModel
+		}
+	}
+
+	if req.ThinkingBudget != nil {
+		thinkingBudget = req.ThinkingBudget
+	} else if req.ReasoningEffort != "" {
+		effort := strings.ToLower(strings.TrimSpace(req.ReasoningEffort))
+		switch effort {
+		case "none", "off", "disable", "disabled", "minimal":
+			zero := 0
+			thinkingBudget = &zero
+			if strings.HasSuffix(resolvedModel, "-high") || strings.HasSuffix(resolvedModel, "-medium") {
+				resolvedModel = strings.TrimSuffix(strings.TrimSuffix(resolvedModel, "-high"), "-medium") + "-low"
+				gReq.Model = resolvedModel
+			}
+		case "low":
+			zero := 0
+			thinkingBudget = &zero
+			if strings.HasSuffix(resolvedModel, "-high") || strings.HasSuffix(resolvedModel, "-medium") {
+				resolvedModel = strings.TrimSuffix(strings.TrimSuffix(resolvedModel, "-high"), "-medium") + "-low"
+				gReq.Model = resolvedModel
+			}
+		case "med", "medium":
+			b := 512
+			thinkingBudget = &b
+			if strings.HasSuffix(resolvedModel, "-high") || strings.HasSuffix(resolvedModel, "-low") {
+				resolvedModel = strings.TrimSuffix(strings.TrimSuffix(resolvedModel, "-high"), "-low") + "-medium"
+				gReq.Model = resolvedModel
+			}
+		case "high":
+			b := 8192
+			thinkingBudget = &b
+			if strings.HasSuffix(resolvedModel, "-low") || strings.HasSuffix(resolvedModel, "-medium") {
+				resolvedModel = strings.TrimSuffix(strings.TrimSuffix(resolvedModel, "-low"), "-medium") + "-high"
+				gReq.Model = resolvedModel
+			}
+		case "xhigh", "max", "ultra":
+			b := -1
+			thinkingBudget = &b
+			if strings.HasSuffix(resolvedModel, "-low") || strings.HasSuffix(resolvedModel, "-medium") {
+				resolvedModel = strings.TrimSuffix(strings.TrimSuffix(resolvedModel, "-low"), "-medium") + "-high"
+				gReq.Model = resolvedModel
+			}
+		}
+	} else if isFast || strings.HasSuffix(resolvedModel, "-low") {
+		zero := 0
+		thinkingBudget = &zero
+	} else if strings.HasSuffix(resolvedModel, "-medium") {
+		b := 512
+		thinkingBudget = &b
+	}
+
+	if thinkingBudget != nil {
+		gReq.Request.GenerationConfig["thinkingConfig"] = map[string]any{
+			"thinkingBudget": *thinkingBudget,
+		}
 	}
 
 	// 1. Process Tools declaration
@@ -468,6 +565,11 @@ func ConvertOpenAIToGoogle(req *OpenAIChatRequest) (*GoogleRequest, string) {
 		}
 	}
 
+	if isFast {
+		const fastDirective = "Respond immediately and concisely. Do not use internal reasoning steps, scratchpads, or thinking deliberation."
+		systemParts = append(systemParts, GooglePart{Text: fastDirective})
+	}
+
 	if len(systemParts) > 0 {
 		gReq.Request.SystemInstruction = &struct {
 			Parts []GooglePart `json:"parts"`
@@ -545,6 +647,49 @@ func ConvertClaudeToGoogle(req *ClaudeRequest) (*GoogleRequest, string) {
 		gReq.Request.GenerationConfig["topP"] = *req.TopP
 	}
 
+	var thinkingBudget *int
+	isFast := false
+	if req.FastMode != nil {
+		isFast = *req.FastMode
+	} else if IsGlobalFastMode() {
+		isFast = true
+	} else if strings.HasSuffix(strings.ToLower(req.Model), "-fast") || strings.HasSuffix(strings.ToLower(resolvedModel), "-fast") {
+		isFast = true
+	}
+
+	if isFast {
+		if strings.HasSuffix(resolvedModel, "-high") {
+			resolvedModel = strings.TrimSuffix(resolvedModel, "-high") + "-low"
+			gReq.Model = resolvedModel
+		} else if strings.HasSuffix(resolvedModel, "-medium") {
+			resolvedModel = strings.TrimSuffix(resolvedModel, "-medium") + "-low"
+			gReq.Model = resolvedModel
+		}
+	}
+
+	if req.Thinking != nil {
+		tType, _ := req.Thinking["type"].(string)
+		if tType == "disabled" {
+			zero := 0
+			thinkingBudget = &zero
+		} else if b, ok := req.Thinking["budget_tokens"].(float64); ok {
+			bInt := int(b)
+			thinkingBudget = &bInt
+		}
+	} else if isFast || strings.HasSuffix(resolvedModel, "-low") {
+		zero := 0
+		thinkingBudget = &zero
+	} else if strings.HasSuffix(resolvedModel, "-medium") {
+		b := 512
+		thinkingBudget = &b
+	}
+
+	if thinkingBudget != nil {
+		gReq.Request.GenerationConfig["thinkingConfig"] = map[string]any{
+			"thinkingBudget": *thinkingBudget,
+		}
+	}
+
 	// Handle Anthropic Tools declaration
 	if len(req.Tools) > 0 {
 		var funcDecls []map[string]any
@@ -573,14 +718,22 @@ func ConvertClaudeToGoogle(req *ClaudeRequest) (*GoogleRequest, string) {
 		}
 	}
 
+	var sysParts []GooglePart
 	if req.System != nil {
 		sysText := extractText(req.System)
 		if sysText != "" {
-			gReq.Request.SystemInstruction = &struct {
-				Parts []GooglePart `json:"parts"`
-			}{
-				Parts: []GooglePart{{Text: sysText}},
-			}
+			sysParts = append(sysParts, GooglePart{Text: sysText})
+		}
+	}
+	if isFast {
+		const fastDirective = "Respond immediately and concisely. Do not use internal reasoning steps, scratchpads, or thinking deliberation."
+		sysParts = append(sysParts, GooglePart{Text: fastDirective})
+	}
+	if len(sysParts) > 0 {
+		gReq.Request.SystemInstruction = &struct {
+			Parts []GooglePart `json:"parts"`
+		}{
+			Parts: sysParts,
 		}
 	}
 
@@ -920,17 +1073,13 @@ func ParseGoogleSSEChunk(raw []byte) (ParsedChunk, error) {
 		cand := chunk.Response.Candidates[0]
 		res.FinishReason = cand.FinishReason
 
-		var textBuilder strings.Builder
-		var reasoningBuilder strings.Builder
-		for _, part := range cand.Content.Parts {
+		parts := cand.Content.Parts
+		if len(parts) == 1 {
+			part := parts[0]
 			if part.Thought {
-				if part.Text != "" {
-					reasoningBuilder.WriteString(part.Text)
-				}
+				res.ReasoningText = part.Text
 			} else {
-				if part.Text != "" {
-					textBuilder.WriteString(part.Text)
-				}
+				res.Text = part.Text
 			}
 			if part.ThoughtSignature != "" {
 				res.ThoughtSignature = part.ThoughtSignature
@@ -953,9 +1102,44 @@ func ParseGoogleSSEChunk(raw []byte) (ParsedChunk, error) {
 				tc.Function.Arguments = string(argsBytes)
 				res.ToolCalls = append(res.ToolCalls, tc)
 			}
+		} else if len(parts) > 1 {
+			var textBuilder strings.Builder
+			var reasoningBuilder strings.Builder
+			for _, part := range parts {
+				if part.Thought {
+					if part.Text != "" {
+						reasoningBuilder.WriteString(part.Text)
+					}
+				} else {
+					if part.Text != "" {
+						textBuilder.WriteString(part.Text)
+					}
+				}
+				if part.ThoughtSignature != "" {
+					res.ThoughtSignature = part.ThoughtSignature
+					res.Thought = part.ThoughtSignature
+				}
+				if part.FunctionCall != nil {
+					rawCallID := part.FunctionCall.ID
+					if rawCallID == "" {
+						rawCallID = GenerateID("call")
+					}
+					argsBytes, _ := json.Marshal(part.FunctionCall.Args)
+					RecordToolCall(rawCallID, part.FunctionCall.Name, string(argsBytes), part.ThoughtSignature)
+
+					packedID := PackCallID(rawCallID, part.ThoughtSignature)
+					tc := OpenAIToolCall{
+						ID:   packedID,
+						Type: "function",
+					}
+					tc.Function.Name = part.FunctionCall.Name
+					tc.Function.Arguments = string(argsBytes)
+					res.ToolCalls = append(res.ToolCalls, tc)
+				}
+			}
+			res.Text = textBuilder.String()
+			res.ReasoningText = reasoningBuilder.String()
 		}
-		res.Text = textBuilder.String()
-		res.ReasoningText = reasoningBuilder.String()
 	}
 
 	return res, nil
@@ -993,8 +1177,72 @@ func FormatOpenAIUsageChunk(id, model string, u *GoogleUsageMetadata) string {
 	return "data: " + string(b) + "\n\n"
 }
 
+var chunkBufPool = sync.Pool{
+	New: func() any {
+		b := new(bytes.Buffer)
+		b.Grow(512)
+		return b
+	},
+}
+
 // FormatOpenAIChunk formats an incremental delta for OpenAI streaming client
 func FormatOpenAIChunk(id, model, text, reasoningText, finishReason string, toolCalls []OpenAIToolCall) string {
+	if len(toolCalls) == 0 && finishReason == "" {
+		now := time.Now().Unix()
+		if text != "" && reasoningText == "" {
+			escText, _ := json.Marshal(text)
+			buf := chunkBufPool.Get().(*bytes.Buffer)
+			buf.Reset()
+			buf.WriteString("data: {\"id\":\"")
+			buf.WriteString(id)
+			buf.WriteString("\",\"object\":\"chat.completion.chunk\",\"created\":")
+			buf.WriteString(strconv.FormatInt(now, 10))
+			buf.WriteString(",\"model\":\"")
+			buf.WriteString(model)
+			buf.WriteString("\",\"choices\":[{\"index\":0,\"delta\":{\"content\":")
+			buf.Write(escText)
+			buf.WriteString("},\"finish_reason\":null}]}\n\n")
+			s := buf.String()
+			chunkBufPool.Put(buf)
+			return s
+		} else if reasoningText != "" && text == "" {
+			escReas, _ := json.Marshal(reasoningText)
+			buf := chunkBufPool.Get().(*bytes.Buffer)
+			buf.Reset()
+			buf.WriteString("data: {\"id\":\"")
+			buf.WriteString(id)
+			buf.WriteString("\",\"object\":\"chat.completion.chunk\",\"created\":")
+			buf.WriteString(strconv.FormatInt(now, 10))
+			buf.WriteString(",\"model\":\"")
+			buf.WriteString(model)
+			buf.WriteString("\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":")
+			buf.Write(escReas)
+			buf.WriteString("},\"finish_reason\":null}]}\n\n")
+			s := buf.String()
+			chunkBufPool.Put(buf)
+			return s
+		} else if text != "" && reasoningText != "" {
+			escText, _ := json.Marshal(text)
+			escReas, _ := json.Marshal(reasoningText)
+			buf := chunkBufPool.Get().(*bytes.Buffer)
+			buf.Reset()
+			buf.WriteString("data: {\"id\":\"")
+			buf.WriteString(id)
+			buf.WriteString("\",\"object\":\"chat.completion.chunk\",\"created\":")
+			buf.WriteString(strconv.FormatInt(now, 10))
+			buf.WriteString(",\"model\":\"")
+			buf.WriteString(model)
+			buf.WriteString("\",\"choices\":[{\"index\":0,\"delta\":{\"content\":")
+			buf.Write(escText)
+			buf.WriteString(",\"reasoning_content\":")
+			buf.Write(escReas)
+			buf.WriteString("},\"finish_reason\":null}]}\n\n")
+			s := buf.String()
+			chunkBufPool.Put(buf)
+			return s
+		}
+	}
+
 	type Choice struct {
 		Index        int            `json:"index"`
 		Delta        map[string]any `json:"delta"`

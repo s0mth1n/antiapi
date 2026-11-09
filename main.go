@@ -12,14 +12,18 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
 	"antiapi/auth"
 	"antiapi/models"
 	"antiapi/server"
+	"antiapi/translator"
+	"antiapi/transport"
 	"antiapi/tui"
 	"antiapi/tunnel"
+	"antiapi/upstream"
 )
 
 func initAndroidDNS() {
@@ -44,7 +48,12 @@ func main() {
 	host := flag.String("host", "0.0.0.0", "Host address to bind")
 	noTui := flag.Bool("no-tui", false, "Disable interactive TUI and use streaming logs")
 	enableTunnel := flag.Bool("tunnel", false, "Start a cloudflared public tunnel and expose the API over HTTPS")
+	fastMode := flag.Bool("fast-mode", false, "Enable low-latency fast mode (disables thinking budget for instant TTFT)")
 	flag.Parse()
+
+	if *fastMode || os.Getenv("ANTIAPI_FAST_MODE") == "1" || strings.ToLower(os.Getenv("ANTIAPI_FAST_MODE")) == "true" {
+		translator.SetGlobalFastMode(true)
+	}
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmsgprefix)
 	log.SetPrefix("[antiapi] ")
@@ -52,13 +61,25 @@ func main() {
 	srv := server.NewServer()
 	addr := fmt.Sprintf("%s:%d", *host, *port)
 	httpServer := &http.Server{
-		Addr:    addr,
-		Handler: srv,
+		Addr:              addr,
+		Handler:           srv,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	useTUI := !*noTui && tui.IsTerminal(os.Stdout.Fd())
 
 	var appTUI *tui.TUI
+	tui.SetQuotaRefreshHook(func() {
+		auth.GetPool().ClearAllRateLimits()
+		upstream.ClearAllEndpointCooldowns()
+		for _, acc := range auth.GetPool().GetAllAccounts() {
+			_, _ = acc.Refresh()
+			_, _ = acc.FetchQuotaSummary()
+		}
+		_ = models.GetRegistry().FetchLiveModels()
+	})
+
 	if useTUI {
 		homeDir, _ := os.UserHomeDir()
 		logDir := filepath.Join(homeDir, ".anti-api")
@@ -74,6 +95,9 @@ func main() {
 	} else {
 		log.Printf("Starting AntiAPI Gateway v1.1.0 on http://%s", addr)
 		log.Printf("Dashboard: http://localhost:%d/ | OpenAI: http://localhost:%d/v1", *port, *port)
+		if translator.IsGlobalFastMode() {
+			log.Printf("⚡ Fast Mode: ENABLED (Zero-thinking budget for minimum latency)")
+		}
 	}
 
 	pool := auth.GetPool()
@@ -86,6 +110,10 @@ func main() {
 			go acc.Refresh()
 		}
 	}
+
+	// Prewarm HTTP/2 multiplexed connections to Google Cloud Code upstream
+	transport.PrewarmConnection(upstream.StandardEndpoint)
+	transport.PrewarmConnection(upstream.DailyEndpoint)
 
 	// Fetch initial models in background
 	go func() {
@@ -104,27 +132,31 @@ func main() {
 		}
 	}()
 
-	// Cloudflare Tunnel
-	var tun *tunnel.Tunnel
-	if *enableTunnel || os.Getenv("ANTIAPI_TUNNEL") == "1" || os.Getenv("ANTIAPI_TUNNEL") == "true" {
-		t, err := tunnel.Start(context.Background(), *port)
-		if err != nil {
-			log.Printf("[Tunnel] Warning: could not start cloudflared tunnel: %v", err)
+	// Cloudflare Tunnel Manager initialization
+	tunnel.GetManager().Init(*port, func(url string) {
+		srv.SetPublicURL(url)
+		if useTUI {
+			tui.SetTunnelURL(url)
+			tui.SetActivity(fmt.Sprintf("⚡ Tunnel active: %s", url))
 		} else {
-			tun = t
-			go func() {
-				url, err := tun.WaitURL(30 * time.Second)
-				if err != nil {
-					log.Printf("[Tunnel] Failed to resolve public URL: %v", err)
-					return
-				}
-				srv.SetPublicURL(url)
-				log.Printf("Public API Tunnel: %s/v1", url)
-				if useTUI {
-					tui.SetTunnelURL(url)
-				}
-			}()
+			log.Printf("Public API Tunnel: %s/v1", url)
 		}
+	}, func() {
+		srv.SetPublicURL("")
+		if useTUI {
+			tui.SetTunnelURL("")
+			tui.SetActivity("Cloudflare tunnel stopped")
+		} else {
+			log.Printf("Public API Tunnel stopped")
+		}
+	})
+
+	if *enableTunnel || os.Getenv("ANTIAPI_TUNNEL") == "1" || strings.ToLower(os.Getenv("ANTIAPI_TUNNEL")) == "true" {
+		go func() {
+			if _, err := tunnel.GetManager().Start(); err != nil {
+				log.Printf("[Tunnel] Warning: could not start cloudflared tunnel: %v", err)
+			}
+		}()
 	}
 
 	// Graceful shutdown
@@ -142,9 +174,7 @@ func main() {
 	}()
 
 	<-stop
-	if tun != nil {
-		tun.Stop()
-	}
+	tunnel.GetManager().Stop()
 	if useTUI && appTUI != nil {
 		appTUI.Stop()
 	}

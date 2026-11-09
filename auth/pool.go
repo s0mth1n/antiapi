@@ -262,11 +262,18 @@ func (a *Account) resolveProjectID() {
 	}
 }
 
+type sessionBinding struct {
+	email    string
+	lastUsed time.Time
+}
+
 type AccountPool struct {
-	mu           sync.RWMutex
-	accounts     []*Account
-	currentIndex int
-	storagePath  string
+	mu              sync.RWMutex
+	accounts        []*Account
+	currentIndex    int
+	storagePath     string
+	sessionMu       sync.RWMutex
+	sessionBindings map[string]sessionBinding
 }
 
 var (
@@ -282,12 +289,45 @@ func GetPool() *AccountPool {
 		storagePath := filepath.Join(storageDir, "accounts.json")
 
 		globalPool = &AccountPool{
-			accounts:    []*Account{},
-			storagePath: storagePath,
+			accounts:        []*Account{},
+			storagePath:     storagePath,
+			sessionBindings: make(map[string]sessionBinding),
 		}
 		globalPool.Load()
+		globalPool.startBackgroundRefresher()
 	})
 	return globalPool
+}
+
+func (p *AccountPool) startBackgroundRefresher() {
+	go func() {
+		ticker := time.NewTicker(3 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			p.refreshExpiringTokens()
+		}
+	}()
+}
+
+func (p *AccountPool) refreshExpiringTokens() {
+	p.mu.RLock()
+	accs := make([]*Account, len(p.accounts))
+	copy(accs, p.accounts)
+	p.mu.RUnlock()
+
+	threshold := time.Now().Add(10 * time.Minute)
+	for _, acc := range accs {
+		acc.mu.RLock()
+		needsRefresh := acc.RefreshToken != "" && (acc.AccessToken == "" || threshold.After(acc.ExpiresAt))
+		email := acc.Email
+		acc.mu.RUnlock()
+
+		if needsRefresh {
+			if _, err := acc.Refresh(); err == nil {
+				log.Printf("[Pool] Proactively refreshed token for %s", email)
+			}
+		}
+	}
 }
 
 func (p *AccountPool) Load() {
@@ -353,10 +393,13 @@ func (p *AccountPool) Load() {
 		}
 	}
 
-	// 3. Fallback: discover from IDE state DB
+	// 3. Fallback: discover from IDE state DB (Linux & macOS)
 	dbCandidates := []string{
+		filepath.Join(homeDir, "Library", "Application Support", "Antigravity", "User", "globalStorage", "state.vscdb"),
+		filepath.Join(homeDir, "Library", "Application Support", "Code", "User", "globalStorage", "state.vscdb"),
 		filepath.Join(homeDir, ".config", "Antigravity", "User", "globalStorage", "state.vscdb"),
 		filepath.Join(homeDir, ".antigravity-ide", "User", "globalStorage", "state.vscdb"),
+		filepath.Join(homeDir, ".config", "Code", "User", "globalStorage", "state.vscdb"),
 	}
 	reRefreshToken := regexp.MustCompile(`1//[0-9a-zA-Z_-]{30,}`)
 	for _, dbPath := range dbCandidates {
@@ -553,6 +596,65 @@ func (p *AccountPool) NextAvailableAccount(exclude ...map[string]bool) (*Account
 		return nil, fmt.Errorf("all %d accounts in pool are in cooldown (earliest unlock: %s at %s)", len(p.accounts), bestAcc.Email, earliest.Format(time.Kitchen))
 	}
 	return nil, fmt.Errorf("no available accounts in pool")
+}
+
+// GetAccountForSession selects an account for a session, keeping multi-turn conversations
+// pinned to the same account for prompt KV cache reuse. Falls back to round-robin on failover.
+func (p *AccountPool) GetAccountForSession(sessionID string, exclude ...map[string]bool) (*Account, error) {
+	var excluded map[string]bool
+	if len(exclude) > 0 {
+		excluded = exclude[0]
+	}
+
+	if sessionID != "" {
+		p.sessionMu.RLock()
+		binding, exists := p.sessionBindings[sessionID]
+		p.sessionMu.RUnlock()
+
+		if exists && (excluded == nil || !excluded[binding.email]) {
+			p.mu.RLock()
+			var boundAcc *Account
+			for _, a := range p.accounts {
+				if a.Email == binding.email {
+					boundAcc = a
+					break
+				}
+			}
+			p.mu.RUnlock()
+
+			if boundAcc != nil && boundAcc.IsAvailable() && boundAcc.HasHealthyQuota() && boundAcc.AvailableSlots() > 0 {
+				p.sessionMu.Lock()
+				p.sessionBindings[sessionID] = sessionBinding{
+					email:    binding.email,
+					lastUsed: time.Now(),
+				}
+				p.sessionMu.Unlock()
+				return boundAcc, nil
+			}
+		}
+	}
+
+	acc, err := p.NextAvailableAccount(exclude...)
+	if err != nil {
+		return nil, err
+	}
+
+	if sessionID != "" {
+		p.sessionMu.Lock()
+		p.sessionBindings[sessionID] = sessionBinding{
+			email:    acc.Email,
+			lastUsed: time.Now(),
+		}
+		now := time.Now()
+		for k, v := range p.sessionBindings {
+			if now.Sub(v.lastUsed) > time.Hour {
+				delete(p.sessionBindings, k)
+			}
+		}
+		p.sessionMu.Unlock()
+	}
+
+	return acc, nil
 }
 
 // ReorderAccounts sets the priority order of accounts based on the provided list of emails
