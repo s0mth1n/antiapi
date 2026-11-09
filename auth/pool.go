@@ -184,10 +184,13 @@ func (a *Account) Refresh() (string, error) {
 	if a.RefreshToken == "" {
 		return "", fmt.Errorf("account %s has no refresh token", a.Email)
 	}
+	if !OAuthConfigured() {
+		return "", ErrOAuthNotConfigured
+	}
 
 	form := url.Values{}
-	form.Set("client_id", ClientID)
-	form.Set("client_secret", ClientSecret)
+	form.Set("client_id", OAuthClientID())
+	form.Set("client_secret", OAuthClientSecret())
 	form.Set("refresh_token", a.RefreshToken)
 	form.Set("grant_type", "refresh_token")
 
@@ -318,7 +321,7 @@ func GetPool() *AccountPool {
 
 func (p *AccountPool) startBackgroundRefresher() {
 	go func() {
-		ticker := time.NewTicker(3 * time.Minute)
+		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
 			p.refreshExpiringTokens()
@@ -759,6 +762,14 @@ type QuotaGroup struct {
 type UserQuotaSummary struct {
 	Groups      []QuotaGroup `json:"groups"`
 	Description string       `json:"description"`
+}
+
+// GetCachedQuotaSummary returns the last fetched summary and its age without
+// touching the network, so status endpoints never block on upstream.
+func (a *Account) GetCachedQuotaSummary() (*UserQuotaSummary, time.Time) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.LastQuotaSummary, a.LastQuotaFetchTime
 }
 
 func (a *Account) FetchQuotaSummary() (*UserQuotaSummary, error) {

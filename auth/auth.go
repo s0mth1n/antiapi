@@ -19,8 +19,6 @@ import (
 )
 
 const (
-	ClientID       = "REMOVED_OAUTH_CLIENT_ID.apps.googleusercontent.com"
-	ClientSecret   = "REMOVED_OAUTH_CLIENT_SECRET"
 	TokenURL       = "https://oauth2.googleapis.com/token"
 	ProjectURL     = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
 	DefaultProject = "aicode-consumers"
@@ -138,10 +136,13 @@ func (tm *TokenManager) Refresh() (string, error) {
 	if tm.RefreshToken == "" {
 		return "", fmt.Errorf("no refresh token available")
 	}
+	if !OAuthConfigured() {
+		return "", ErrOAuthNotConfigured
+	}
 
 	form := url.Values{}
-	form.Set("client_id", ClientID)
-	form.Set("client_secret", ClientSecret)
+	form.Set("client_id", OAuthClientID())
+	form.Set("client_secret", OAuthClientSecret())
 	form.Set("refresh_token", tm.RefreshToken)
 	form.Set("grant_type", "refresh_token")
 

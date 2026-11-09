@@ -50,6 +50,9 @@ func generateRandomString(length int) string {
 }
 
 func GenerateAuthURL() (string, string) {
+	if !OAuthConfigured() {
+		return "", ""
+	}
 	state := generateRandomString(16)
 	verifier := generateRandomString(32)
 
@@ -65,7 +68,7 @@ func GenerateAuthURL() (string, string) {
 	pkceMu.Unlock()
 
 	params := url.Values{}
-	params.Set("client_id", ClientID)
+	params.Set("client_id", OAuthClientID())
 	params.Set("redirect_uri", OAuthRedirectURI)
 	params.Set("response_type", "code")
 	params.Set("scope", strings.Join(OAuthScopes, " "))
@@ -92,8 +95,8 @@ func ExchangeCode(code, state string) (refreshToken, accessToken, email string, 
 
 	form := url.Values{}
 	form.Set("code", code)
-	form.Set("client_id", ClientID)
-	form.Set("client_secret", ClientSecret)
+	form.Set("client_id", OAuthClientID())
+	form.Set("client_secret", OAuthClientSecret())
 	form.Set("redirect_uri", OAuthRedirectURI)
 	form.Set("grant_type", "authorization_code")
 	form.Set("code_verifier", session.Verifier)
