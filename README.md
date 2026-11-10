@@ -275,7 +275,7 @@ print()
 | `ANTIGRAVITY_REFRESH_TOKEN` | _(empty)_ | Import this refresh token as an account at startup |
 | `ANTIAPI_MAX_RPS` | _(off)_ | Per-account requests/second cap with a burst bucket of the same size; smooths bursts to keep accounts healthy |
 | `ANTIAPI_MAX_CONCURRENCY` | `4` | Max concurrent upstream requests per account |
-| `ANTIAPI_ENABLE_DAILY_ENDPOINT` | _(off)_ | Allow falling back to Google's daily (dogfood) endpoint when the production endpoint is cooling down. Off by default on purpose: daily is a pre-release channel and production traffic there can look abnormal on your account. |
+| `ANTIAPI_ENABLE_PROD_ENDPOINT` | _(off)_ | Prefer Google's production endpoint for completions. Off by default: like the official Antigravity client, completions go to the daily endpoint, which is what these accounts are served on (production answers instant 429s); production is used for metadata (account tier, model list, quota) and as the completion fallback. |
 | `ANTIAPI_JITTER_MS` | `0` | Base random delay before each upstream request |
 
 Keyless mode is loopback-oriented: without an API key the gateway only answers CORS preflights from localhost origins, so a website you visit cannot drive your local gateway from the browser. Set an API key if you need cross-origin browser access.

@@ -62,20 +62,67 @@ func TestExtractValidationURLAbsent(t *testing.T) {
 	}
 }
 
-func TestDailyEndpointGating(t *testing.T) {
-	if dailyEndpointEnabled() {
-		t.Error("daily endpoint should be disabled by default")
+func TestProdEndpointGating(t *testing.T) {
+	if prodEndpointEnabled() {
+		t.Error("prod endpoint should be opt-in, not default")
 	}
-	t.Setenv("ANTIAPI_ENABLE_DAILY_ENDPOINT", "1")
-	if !dailyEndpointEnabled() {
-		t.Error("daily endpoint should be enabled with env=1")
+	t.Setenv("ANTIAPI_ENABLE_PROD_ENDPOINT", "1")
+	if !prodEndpointEnabled() {
+		t.Error("prod endpoint should be enabled with env=1")
 	}
-	t.Setenv("ANTIAPI_ENABLE_DAILY_ENDPOINT", "true")
-	if !dailyEndpointEnabled() {
-		t.Error("daily endpoint should be enabled with env=true")
+	t.Setenv("ANTIAPI_ENABLE_PROD_ENDPOINT", "true")
+	if !prodEndpointEnabled() {
+		t.Error("prod endpoint should be enabled with env=true")
 	}
-	t.Setenv("ANTIAPI_ENABLE_DAILY_ENDPOINT", "0")
-	if dailyEndpointEnabled() {
-		t.Error("daily endpoint should be disabled with env=0")
+	t.Setenv("ANTIAPI_ENABLE_PROD_ENDPOINT", "0")
+	if prodEndpointEnabled() {
+		t.Error("prod endpoint should be disabled with env=0")
 	}
+}
+
+func TestCompletionEndpointsDefaultDailyFirst(t *testing.T) {
+	ClearAllEndpointCooldowns()
+	email := "daily-default@example.com"
+	got := completionEndpoints(email)
+	if len(got) != 2 || got[0] != DailyEndpoint || got[1] != StandardEndpoint {
+		t.Fatalf("default order should be daily then prod, got %v", got)
+	}
+}
+
+func TestCompletionEndpointsProdOptIn(t *testing.T) {
+	ClearAllEndpointCooldowns()
+	t.Setenv("ANTIAPI_ENABLE_PROD_ENDPOINT", "1")
+	got := completionEndpoints("prod-optin@example.com")
+	if len(got) != 2 || got[0] != StandardEndpoint || got[1] != DailyEndpoint {
+		t.Fatalf("prod opt-in order should be prod then daily, got %v", got)
+	}
+}
+
+func TestCompletionEndpointsSkipsCoolingDownPrimary(t *testing.T) {
+	ClearAllEndpointCooldowns()
+	email := "cooling@example.com"
+	markEndpointCooldown(email, DailyEndpoint, time.Minute)
+	got := completionEndpoints(email)
+	if got[0] != StandardEndpoint {
+		t.Fatalf("cooling-down daily should yield prod first, got %v", got)
+	}
+	clearEndpointCooldown(email, DailyEndpoint)
+}
+
+func TestCompletionEndpointsRemembersPreference(t *testing.T) {
+	ClearAllEndpointCooldowns()
+	email := "pref@example.com"
+	setPreferredEndpoint(email, StandardEndpoint)
+	defer setPreferredEndpoint(email, "")
+	got := completionEndpoints(email)
+	if got[0] != StandardEndpoint {
+		t.Fatalf("remembered prod preference should win, got %v", got)
+	}
+	// A preference in cooldown must be ignored.
+	markEndpointCooldown(email, StandardEndpoint, time.Minute)
+	got = completionEndpoints(email)
+	if got[0] != DailyEndpoint {
+		t.Fatalf("cooling-down preference must not lead, got %v", got)
+	}
+	clearEndpointCooldown(email, StandardEndpoint)
 }

@@ -42,11 +42,36 @@ var (
 	preferredEndpoint  = make(map[string]string)
 )
 
-// dailyEndpointEnabled reports whether the Google dogfood endpoint may be
-// used as a fallback. Off by default: ANTIAPI_ENABLE_DAILY_ENDPOINT=1 opts in.
-func dailyEndpointEnabled() bool {
-	v := strings.ToLower(os.Getenv("ANTIAPI_ENABLE_DAILY_ENDPOINT"))
+// prodEndpointEnabled reports whether completions should prefer the
+// production endpoint. Off by default: like the official Antigravity client,
+// completions go to the daily endpoint; ANTIAPI_ENABLE_PROD_ENDPOINT=1 opts
+// into production-first routing.
+func prodEndpointEnabled() bool {
+	v := strings.ToLower(os.Getenv("ANTIAPI_ENABLE_PROD_ENDPOINT"))
 	return v == "1" || v == "true" || v == "yes"
+}
+
+// completionEndpoints returns the upstream endpoints to try for a completion
+// request, first to last. Completions default to the daily endpoint (where
+// the official client sends all of its traffic); production serves metadata
+// (loadCodeAssist, model list, quota) and is the completion fallback. A
+// remembered per-account preference wins unless it is cooling down, and a
+// cooling-down primary is skipped in favour of the secondary.
+func completionEndpoints(email string) []string {
+	primary, secondary := DailyEndpoint, StandardEndpoint
+	if prodEndpointEnabled() {
+		primary, secondary = secondary, primary
+	}
+	if pref := getPreferredEndpoint(email); pref != "" && !isEndpointInCooldown(email, pref) {
+		if pref == secondary {
+			return []string{secondary, primary}
+		}
+		return []string{primary, secondary}
+	}
+	if isEndpointInCooldown(email, primary) && !isEndpointInCooldown(email, secondary) {
+		return []string{secondary, primary}
+	}
+	return []string{primary, secondary}
 }
 
 func getPreferredEndpoint(email string) string {
@@ -257,20 +282,10 @@ attempt:
 		ua := BuildUserAgent()
 		clientVersion := fmt.Sprintf("antigravity-ide/2.9.1 gl-go/%s", runtime.Version())
 
-		// The daily (dogfood) endpoint is opt-in: ANTIAPI_ENABLE_DAILY_ENDPOINT=1.
-		// Default traffic stays on the production endpoint; daily is a Google
-		// pre-release channel and routing production traffic there without
-		// asking is an account-safety risk.
-		endpoints := []string{StandardEndpoint}
-		if dailyEndpointEnabled() {
-			endpoints = append(endpoints, DailyEndpoint)
-			pref := getPreferredEndpoint(acc.Email)
-			if pref == DailyEndpoint && !isEndpointInCooldown(acc.Email, DailyEndpoint) {
-				endpoints = []string{DailyEndpoint, StandardEndpoint}
-			} else if isEndpointInCooldown(acc.Email, StandardEndpoint) && !isEndpointInCooldown(acc.Email, DailyEndpoint) {
-				endpoints = []string{DailyEndpoint, StandardEndpoint}
-			}
-		}
+		// Completions default to the daily endpoint, matching the official
+		// Antigravity client; production only serves these accounts 429s for
+		// streamGenerateContent. See completionEndpoints.
+		endpoints := completionEndpoints(acc.Email)
 		saw429 := false
 		accountClient := transport.NewAccountClient(acc.Email, RequestTimeout)
 		retried401 := false
