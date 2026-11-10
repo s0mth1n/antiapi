@@ -36,7 +36,62 @@ type Account struct {
 	LastQuotaFetchTime time.Time          `json:"-"`
 	sem                chan struct{}      `json:"-"`
 	semOnce            sync.Once          `json:"-"`
+	rateTokens         float64            `json:"-"`
+	rateLast           time.Time          `json:"-"`
 	mu                 sync.RWMutex
+}
+
+// maxRequestsPerSecond is the optional per-account request cap
+// (ANTIAPI_MAX_RPS). 0 disables the limiter. It smooths bursts so a runaway
+// client loop cannot hammer one account faster than Google is likely to
+// tolerate.
+func maxRequestsPerSecond() float64 {
+	if envVal := os.Getenv("ANTIAPI_MAX_RPS"); envVal != "" {
+		if parsed, err := strconv.ParseFloat(envVal, 64); err == nil && parsed > 0 {
+			return parsed
+		}
+	}
+	return 0
+}
+
+// waitForRateToken blocks until the per-account token bucket yields a token
+// or the context ends. No-op when ANTIAPI_MAX_RPS is unset.
+func (a *Account) waitForRateToken(ctx context.Context) error {
+	rps := maxRequestsPerSecond()
+	if rps <= 0 {
+		return nil
+	}
+	for {
+		a.mu.Lock()
+		now := time.Now()
+		if a.rateLast.IsZero() {
+			a.rateTokens = rps // start with a full bucket (burst of rps)
+			a.rateLast = now
+		}
+		elapsed := now.Sub(a.rateLast).Seconds()
+		a.rateTokens = minFloat(a.rateTokens+elapsed*rps, rps)
+		a.rateLast = now
+		if a.rateTokens >= 1 {
+			a.rateTokens--
+			a.mu.Unlock()
+			return nil
+		}
+		deficit := 1 - a.rateTokens
+		a.mu.Unlock()
+		wait := time.Duration(deficit/rps*1000) * time.Millisecond
+		select {
+		case <-time.After(wait):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+func minFloat(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func (a *Account) getSem() chan struct{} {
@@ -58,6 +113,9 @@ func (a *Account) AvailableSlots() int {
 }
 
 func (a *Account) Acquire(ctx context.Context) error {
+	if err := a.waitForRateToken(ctx); err != nil {
+		return err
+	}
 	sem := a.getSem()
 	select {
 	case sem <- struct{}{}:
@@ -336,6 +394,9 @@ func (p *AccountPool) refreshExpiringTokens() {
 	p.mu.RUnlock()
 
 	threshold := time.Now().Add(10 * time.Minute)
+	// Refresh in parallel: serial round trips to Google add ~1s per account
+	// to every tick and to startup.
+	var wg sync.WaitGroup
 	for _, acc := range accs {
 		acc.mu.RLock()
 		needsRefresh := acc.RefreshToken != "" && (acc.AccessToken == "" || threshold.After(acc.ExpiresAt))
@@ -343,11 +404,16 @@ func (p *AccountPool) refreshExpiringTokens() {
 		acc.mu.RUnlock()
 
 		if needsRefresh {
-			if _, err := acc.Refresh(); err == nil {
-				log.Printf("[Pool] Proactively refreshed token for %s", email)
-			}
+			wg.Add(1)
+			go func(a *Account, em string) {
+				defer wg.Done()
+				if _, err := a.Refresh(); err == nil {
+					log.Printf("[Pool] Proactively refreshed token for %s", em)
+				}
+			}(acc, email)
 		}
 	}
+	wg.Wait()
 }
 
 func (p *AccountPool) Load() {

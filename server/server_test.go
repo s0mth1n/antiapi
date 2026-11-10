@@ -282,3 +282,59 @@ func TestTunnelAPI(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 }
+
+func TestIsLocalOrigin(t *testing.T) {
+	cases := map[string]bool{
+		"http://localhost:8964":      true,
+		"http://127.0.0.1:8964":      true,
+		"https://[::1]:9000":         true,
+		"https://evil.example.com":   false,
+		"http://localhost.evil.com":  false,
+		"http://127.0.0.1.evil.com":  false,
+		"not a url":                  false,
+	}
+	for origin, want := range cases {
+		if got := isLocalOrigin(origin); got != want {
+			t.Errorf("isLocalOrigin(%q) = %v, want %v", origin, got, want)
+		}
+	}
+}
+
+func TestCORSKeylessReflectsOnlyLocalOrigins(t *testing.T) {
+	SetAPIKey("")
+	defer SetAPIKey("")
+
+	handler := NewServer().cors(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) })
+
+	// Cross-site origin: no ACAO header, browser will block.
+	req := httptest.NewRequest("GET", "/api/status", nil)
+	req.Header.Set("Origin", "https://evil.example.com")
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+	if acao := rec.Header().Get("Access-Control-Allow-Origin"); acao != "" {
+		t.Errorf("keyless cross-origin got ACAO %q, want empty", acao)
+	}
+
+	// Local origin: reflected.
+	req = httptest.NewRequest("GET", "/api/status", nil)
+	req.Header.Set("Origin", "http://localhost:8964")
+	rec = httptest.NewRecorder()
+	handler(rec, req)
+	if acao := rec.Header().Get("Access-Control-Allow-Origin"); acao != "http://localhost:8964" {
+		t.Errorf("keyless local origin got ACAO %q", acao)
+	}
+}
+
+func TestCORSWithKeyAllowsWildcard(t *testing.T) {
+	SetAPIKey("test-key")
+	defer SetAPIKey("")
+
+	handler := NewServer().cors(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) })
+	req := httptest.NewRequest("GET", "/api/status", nil)
+	req.Header.Set("Origin", "https://anywhere.example.com")
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+	if acao := rec.Header().Get("Access-Control-Allow-Origin"); acao != "*" {
+		t.Errorf("with key configured got ACAO %q, want *", acao)
+	}
+}

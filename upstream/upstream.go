@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"regexp"
 	"runtime"
 	"strings"
@@ -40,6 +41,13 @@ var (
 	endpointAffinityMu sync.RWMutex
 	preferredEndpoint  = make(map[string]string)
 )
+
+// dailyEndpointEnabled reports whether the Google dogfood endpoint may be
+// used as a fallback. Off by default: ANTIAPI_ENABLE_DAILY_ENDPOINT=1 opts in.
+func dailyEndpointEnabled() bool {
+	v := strings.ToLower(os.Getenv("ANTIAPI_ENABLE_DAILY_ENDPOINT"))
+	return v == "1" || v == "true" || v == "yes"
+}
 
 func getPreferredEndpoint(email string) string {
 	endpointAffinityMu.RLock()
@@ -249,12 +257,19 @@ attempt:
 		ua := BuildUserAgent()
 		clientVersion := fmt.Sprintf("antigravity-ide/2.9.1 gl-go/%s", runtime.Version())
 
-		endpoints := []string{StandardEndpoint, DailyEndpoint}
-		pref := getPreferredEndpoint(acc.Email)
-		if pref == DailyEndpoint && !isEndpointInCooldown(acc.Email, DailyEndpoint) {
-			endpoints = []string{DailyEndpoint, StandardEndpoint}
-		} else if isEndpointInCooldown(acc.Email, StandardEndpoint) && !isEndpointInCooldown(acc.Email, DailyEndpoint) {
-			endpoints = []string{DailyEndpoint, StandardEndpoint}
+		// The daily (dogfood) endpoint is opt-in: ANTIAPI_ENABLE_DAILY_ENDPOINT=1.
+		// Default traffic stays on the production endpoint; daily is a Google
+		// pre-release channel and routing production traffic there without
+		// asking is an account-safety risk.
+		endpoints := []string{StandardEndpoint}
+		if dailyEndpointEnabled() {
+			endpoints = append(endpoints, DailyEndpoint)
+			pref := getPreferredEndpoint(acc.Email)
+			if pref == DailyEndpoint && !isEndpointInCooldown(acc.Email, DailyEndpoint) {
+				endpoints = []string{DailyEndpoint, StandardEndpoint}
+			} else if isEndpointInCooldown(acc.Email, StandardEndpoint) && !isEndpointInCooldown(acc.Email, DailyEndpoint) {
+				endpoints = []string{DailyEndpoint, StandardEndpoint}
+			}
 		}
 		saw429 := false
 		accountClient := transport.NewAccountClient(acc.Email, RequestTimeout)

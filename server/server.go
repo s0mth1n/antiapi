@@ -9,6 +9,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -191,7 +192,19 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) cors(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		// Keyless mode is localhost-only convenience: without a shared secret,
+		// a wildcard CORS origin lets any website the operator visits call the
+		// gateway from the browser and read account emails or spend quota.
+		// With no key configured, only reflect localhost origins; browsers
+		// block every other cross-origin caller. When a key IS configured,
+		// cross-origin callers still need the key, so a wildcard is safe.
+		origin := r.Header.Get("Origin")
+		if APIKeyConfigured() {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+		} else if origin != "" && isLocalOrigin(origin) {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Vary", "Origin")
+		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "*")
 
@@ -254,6 +267,16 @@ func injectDashboardKey(html []byte, key string) []byte {
 	escKey, _ := json.Marshal(key)
 	snippet := []byte(`<script>window.ANTIAPI_API_KEY=` + string(escKey) + `;</script></head>`)
 	return bytes.Replace(html, []byte("</head>"), snippet, 1)
+}
+
+// isLocalOrigin reports whether an Origin header points at this machine.
+func isLocalOrigin(origin string) bool {
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	return host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "[::1]"
 }
 
 // writeJSONError emits a spec-shaped error body with safe JSON escaping.

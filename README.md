@@ -266,6 +266,20 @@ print()
 | `-tunnel` | `false` | Launch a Cloudflare tunnel and print the public HTTPS URL |
 | `-api-key` | _(empty)_ | Require this key on all endpoints (or set `ANTIAPI_API_KEY`) |
 
+### Environment knobs
+
+| Variable | Default | Description |
+|---|---|---|
+| `ANTIAPI_API_KEY` | _(empty)_ | Require this key on all endpoints (same as `-api-key`) |
+| `ANTIAPI_OAUTH_CLIENT_ID` / `ANTIAPI_OAUTH_CLIENT_SECRET` | _(empty)_ | OAuth client credentials for token refresh and browser login |
+| `ANTIGRAVITY_REFRESH_TOKEN` | _(empty)_ | Import this refresh token as an account at startup |
+| `ANTIAPI_MAX_RPS` | _(off)_ | Per-account requests/second cap with a burst bucket of the same size; smooths bursts to keep accounts healthy |
+| `ANTIAPI_MAX_CONCURRENCY` | `4` | Max concurrent upstream requests per account |
+| `ANTIAPI_ENABLE_DAILY_ENDPOINT` | _(off)_ | Allow falling back to Google's daily (dogfood) endpoint when the production endpoint is cooling down. Off by default on purpose: daily is a pre-release channel and production traffic there can look abnormal on your account. |
+| `ANTIAPI_JITTER_MS` | `0` | Base random delay before each upstream request |
+
+Keyless mode is loopback-oriented: without an API key the gateway only answers CORS preflights from localhost origins, so a website you visit cannot drive your local gateway from the browser. Set an API key if you need cross-origin browser access.
+
 ### Anthropic prompt caching
 
 `cache_control` markers in Anthropic requests are accepted and safely ignored: Google's caching for this upstream is implicit and server-side, so explicit cache breakpoints change nothing.

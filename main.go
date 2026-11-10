@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -78,10 +79,16 @@ func main() {
 	tui.SetQuotaRefreshHook(func() {
 		auth.GetPool().ClearAllRateLimits()
 		upstream.ClearAllEndpointCooldowns()
+		var wg sync.WaitGroup
 		for _, acc := range auth.GetPool().GetAllAccounts() {
-			_, _ = acc.Refresh()
-			_, _ = acc.FetchQuotaSummary()
+			wg.Add(1)
+			go func(a *auth.Account) {
+				defer wg.Done()
+				_, _ = a.Refresh()
+				_, _ = a.FetchQuotaSummary()
+			}(acc)
 		}
+		wg.Wait()
 		_ = models.GetRegistry().FetchLiveModels()
 	})
 

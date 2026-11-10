@@ -61,3 +61,21 @@ func TestExtractValidationURLAbsent(t *testing.T) {
 		t.Fatalf("expected empty, got %q", got)
 	}
 }
+
+func TestDailyEndpointGating(t *testing.T) {
+	if dailyEndpointEnabled() {
+		t.Error("daily endpoint should be disabled by default")
+	}
+	t.Setenv("ANTIAPI_ENABLE_DAILY_ENDPOINT", "1")
+	if !dailyEndpointEnabled() {
+		t.Error("daily endpoint should be enabled with env=1")
+	}
+	t.Setenv("ANTIAPI_ENABLE_DAILY_ENDPOINT", "true")
+	if !dailyEndpointEnabled() {
+		t.Error("daily endpoint should be enabled with env=true")
+	}
+	t.Setenv("ANTIAPI_ENABLE_DAILY_ENDPOINT", "0")
+	if dailyEndpointEnabled() {
+		t.Error("daily endpoint should be disabled with env=0")
+	}
+}

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"sync"
@@ -168,5 +169,48 @@ func TestPoolSessionStickyAffinity(t *testing.T) {
 	}
 	if accFailover.Email == acc1.Email {
 		t.Errorf("expected failover to different account, got %s", accFailover.Email)
+	}
+}
+
+func TestRateLimiterDisabledByDefault(t *testing.T) {
+	t.Setenv("ANTIAPI_MAX_RPS", "")
+	a := &Account{Email: "a@example.com"}
+	start := time.Now()
+	for i := 0; i < 20; i++ {
+		if err := a.waitForRateToken(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if time.Since(start) > 50*time.Millisecond {
+		t.Error("disabled limiter should not block")
+	}
+}
+
+func TestRateLimiterCapsThroughput(t *testing.T) {
+	t.Setenv("ANTIAPI_MAX_RPS", "5")
+	a := &Account{Email: "a@example.com"}
+	// Full bucket: first 5 are instant.
+	for i := 0; i < 5; i++ {
+		if err := a.waitForRateToken(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	start := time.Now()
+	if err := a.waitForRateToken(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(start); elapsed < 100*time.Millisecond {
+		t.Errorf("6th token should wait ~200ms at 5 RPS, waited %v", elapsed)
+	}
+}
+
+func TestRateLimiterRespectsContext(t *testing.T) {
+	t.Setenv("ANTIAPI_MAX_RPS", "1")
+	a := &Account{Email: "a@example.com"}
+	_ = a.waitForRateToken(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if err := a.waitForRateToken(ctx); err == nil {
+		t.Error("expected context cancellation while waiting for a token")
 	}
 }
