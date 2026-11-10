@@ -57,14 +57,41 @@
     flex-direction: column;
     gap: 12px;
   }
+
+  /* Desktop: left sidebar with the app's three tabs (Gateway | Quotas | Console) */
+  .sidenav { display: none; }
+  @media (max-width: 1023px) {
+    main > section { display: contents; }
+  }
   @media (min-width: 1024px) {
-    main {
-      max-width: 1200px;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      align-items: start;
+    header { display: none; }
+    body { display: flex; }
+    .sidenav {
+      display: flex; flex-direction: column; gap: 4px;
+      position: fixed; left: 0; top: 0; bottom: 0; width: 220px;
+      background: var(--bg-header); border-right: 1px solid var(--border-hairline);
+      padding: 20px 12px;
     }
-    main .card.span2 { grid-column: 1 / -1; }
+    .sidenav .brand-name { font-size: 17px; font-weight: 700; padding: 0 10px; }
+    .sidenav .header-status { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--status-success); padding: 2px 10px 18px; }
+    .nav-item {
+      font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--text-secondary); background: none; border: none; cursor: pointer;
+      text-align: left; padding: 10px; border-radius: 8px; border-left: 2px solid transparent;
+    }
+    .nav-item:hover { color: var(--text-primary); }
+    .nav-item.active { color: var(--accent-sky); background: var(--bg-surface-elevated); border-left-color: var(--accent-sky); }
+    main {
+      margin-left: 220px; width: calc(100% - 220px);
+      max-width: none; display: block; padding: 24px 32px 64px;
+    }
+    main > section { display: none; max-width: 1160px; margin: 0 auto; width: 100%; }
+    main > section.active { display: grid; gap: 12px; }
+    main > section[data-tab="gateway"].active { grid-template-columns: 1fr 1fr; align-items: stretch; }
+    main > section[data-tab="quotas"].active { grid-template-columns: 1fr 1fr; align-items: stretch; }
+    main > section[data-tab="quotas"].active .card.wide { grid-column: 1 / -1; }
+    main > section[data-tab="console"].active { grid-template-columns: 1fr; }
   }
   .card {
     background: var(--bg-surface-elevated);
@@ -222,8 +249,17 @@
   <div class="header-status" id="header-status">&#9679; Running</div>
 </header>
 
+<nav class="sidenav" aria-label="Sections">
+  <div class="brand-name">AntiAPI</div>
+  <div class="header-status" id="sidenav-status">&#9679; Running</div>
+  <button class="nav-item active" data-tab="gateway" onclick="selectTab('gateway')">Gateway</button>
+  <button class="nav-item" data-tab="quotas" onclick="selectTab('quotas')">Quotas</button>
+  <button class="nav-item" data-tab="console" onclick="selectTab('console')">Console</button>
+</nav>
+
 <main>
 
+  <section data-tab="gateway" class="active">
   <!-- 1. GATEWAY STATUS -->
   <div class="card">
     <div class="card-head">
@@ -278,6 +314,8 @@
     <button class="btn" onclick="copyCurl()">Copy curl Test</button>
   </div>
 
+  </section>
+  <section data-tab="quotas">
   <!-- 5. ACCOUNT POOL -->
   <div class="card">
     <div class="card-head">
@@ -301,7 +339,7 @@
   </div>
 
   <!-- 7. ADD ACCOUNT TO POOL -->
-  <div class="card">
+  <div class="card wide">
     <div class="card-head">
       <span class="card-label">ADD ACCOUNT TO POOL</span>
     </div>
@@ -312,8 +350,10 @@
     <button class="btn" onclick="addAccount()">Add</button>
   </div>
 
+  </section>
+  <section data-tab="console">
   <!-- 8. LIVE SERVER CONSOLE -->
-  <div class="card span2">
+  <div class="card">
     <div class="card-head">
       <span class="card-label">LIVE SERVER CONSOLE</span>
       <div class="row">
@@ -323,6 +363,7 @@
     </div>
     <div class="console" id="log-body"><div class="card-sub">No requests yet.</div></div>
   </div>
+  </section>
 
 </main>
 
@@ -624,6 +665,16 @@ async function loadLogs() {
     });
   } catch (e) { /* keep last */ }
 }
+function selectTab(name) {
+  document.querySelectorAll('main > section').forEach(sec => sec.classList.toggle('active', sec.dataset.tab === name));
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  if (('#' + name) !== location.hash) history.replaceState(null, '', '#' + name);
+}
+(function () {
+  const initial = (location.hash || '').replace('#', '');
+  if (['gateway', 'quotas', 'console'].includes(initial)) selectTab(initial);
+})();
+
 let clearedBaseline = 0;
 function clearLogs() {
   clearedBaseline = lastLogs.length;
