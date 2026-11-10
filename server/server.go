@@ -373,6 +373,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"public_url":       s.GetPublicURL(),
 		"tunnel_active":    tunnel.GetManager().IsActive(),
 		"tunnel_starting":  tunnel.GetManager().IsStarting(),
+		"tunnel_warning":   tunnelWarning(),
 		"quotas": map[string]float64{
 			"claude_gpt":   claudePct,
 			"gemini_pro":   geminiPct,
@@ -394,6 +395,7 @@ func (s *Server) handleAccounts(w http.ResponseWriter, r *http.Request) {
 		RateLimitedUntil string `json:"rateLimitedUntil,omitempty"`
 		NeedsValidation  bool   `json:"needsValidation,omitempty"`
 		ValidationURL    string `json:"validationUrl,omitempty"`
+		TierStatus       string `json:"tierStatus,omitempty"`
 	}
 
 	res := []AccountInfo{}
@@ -411,6 +413,7 @@ func (s *Server) handleAccounts(w http.ResponseWriter, r *http.Request) {
 			RateLimitedUntil: until,
 			NeedsValidation:  a.GetValidationURL() != "",
 			ValidationURL:    a.GetValidationURL(),
+			TierStatus:       a.TierStatus,
 		})
 	}
 	json.NewEncoder(w).Encode(map[string]any{"accounts": res})
@@ -467,6 +470,14 @@ func (s *Server) handleClearCooldown(w http.ResponseWriter, r *http.Request) {
 	tui.SetActivity("Refreshed quotas & cooldowns via API")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "message": "cooldowns cleared and quotas refreshed"})
+}
+
+// tunnelWarning flags a public tunnel running with no API key configured.
+func tunnelWarning() string {
+	if tunnel.GetManager().IsActive() && !APIKeyConfigured() {
+		return "Public tunnel is active but ANTIAPI_API_KEY is not set: anyone with the URL can use this gateway."
+	}
+	return ""
 }
 
 func (s *Server) handleFastMode(w http.ResponseWriter, r *http.Request) {

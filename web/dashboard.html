@@ -18,7 +18,6 @@
     --border-focus: #38BDF8;
     --accent-primary: #2563EB;
     --accent-sky: #38BDF8;
-    --accent-indigo: #6366F1;
     --status-success: #10B981;
     --status-warning: #F59E0B;
     --status-danger: #EF4444;
@@ -42,169 +41,147 @@
     background: var(--bg-header);
     border-bottom: 1px solid var(--border-hairline);
     padding: 12px 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    position: sticky;
-    top: 0;
-    z-index: 10;
   }
-  .brand { display: flex; align-items: center; gap: 8px; margin-right: auto; }
-  .brand-mark {
-    width: 24px; height: 24px; border-radius: 6px;
-    background: linear-gradient(135deg, var(--accent-primary), var(--accent-indigo));
-    display: flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 700; color: #fff;
-  }
-  .brand-name { font-weight: 700; font-size: 15px; }
-  .brand-tag { color: var(--accent-sky); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; }
-
-  .badge {
+  .brand-name { font-weight: 700; font-size: 17px; }
+  .header-status {
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
-    padding: 3px 9px; border-radius: 5px;
-    border: 1px solid var(--border-hairline);
-    background: var(--bg-surface-elevated);
-    color: var(--text-muted);
-    cursor: default;
-    white-space: nowrap;
+    font-size: 12px; font-weight: 700;
+    color: var(--status-success);
   }
-  .badge.on { color: var(--status-success); border-color: rgba(16,185,129,.35); background: rgba(16,185,129,.08); }
-  .badge.off { color: var(--status-danger); border-color: rgba(239,68,68,.3); background: rgba(239,68,68,.07); }
-  .badge.warn { color: var(--status-warning); border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.08); }
-  .badge.info { color: var(--accent-sky); border-color: rgba(56,189,248,.3); background: rgba(56,189,248,.08); }
-  button.badge { cursor: pointer; }
-  button.badge:hover { filter: brightness(1.25); }
 
   main {
     max-width: 720px;
     margin: 0 auto;
-    padding: 16px 16px 48px;
+    padding: 12px 16px 48px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
   }
   .card {
-    background: var(--bg-surface);
+    background: var(--bg-surface-elevated);
     border: 1px solid var(--border-hairline);
     border-radius: 10px;
     padding: 16px;
   }
   .card-head {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    margin-bottom: 10px;
   }
   .card-label {
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
-    color: var(--text-muted); text-transform: uppercase;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.06em;
+    color: var(--text-muted);
   }
   .card-sub { color: var(--text-muted); font-size: 12px; margin-top: 6px; }
-  .big-status { font-size: 15px; font-weight: 700; color: var(--text-secondary); }
+  .big-status { font-size: 17px; font-weight: 700; color: var(--text-primary); margin-top: 6px; }
+
+  .badge {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px; font-weight: 700;
+    padding: 3px 8px; border-radius: 5px;
+    white-space: nowrap;
+  }
+  .badge.on { color: var(--status-success); background: rgba(16,185,129,.10); }
+  .badge.off { color: var(--status-danger); background: rgba(239,68,68,.10); }
+  .badge.warn { color: var(--status-warning); background: rgba(245,158,11,.10); }
+  .badge.info { color: var(--accent-sky); background: rgba(56,189,248,.10); }
+
+  .inner-box {
+    margin-top: 12px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-hairline);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .inner-box code { color: var(--text-code); font-size: 13px; word-break: break-all; }
+
+  .btn {
+    width: 100%;
+    margin-top: 10px;
+    background: var(--bg-surface-hover);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px; font-weight: 700;
+    cursor: pointer;
+  }
+  .btn:hover { filter: brightness(1.2); }
+  .btn.primary { background: var(--accent-primary); border-color: var(--accent-primary); }
+  .btn.small { width: auto; padding: 6px 12px; font-size: 12px; margin-top: 0; }
+  .btn.danger { color: var(--status-danger); }
+  .btn:disabled { opacity: .5; cursor: default; }
 
   .row { display: flex; align-items: center; gap: 8px; }
   .grow { flex: 1; min-width: 0; }
   .ellip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  .endpoint-box {
-    margin-top: 10px;
-    background: var(--bg-input);
-    border: 1px solid var(--border-hairline);
-    border-radius: 8px;
-    padding: 10px 12px;
-    display: flex; align-items: center; gap: 10px;
-  }
-  .endpoint-box code { color: var(--text-code); font-size: 12.5px; }
-
-  .btn {
-    background: var(--bg-surface-elevated);
-    border: 1px solid var(--border-subtle);
-    color: var(--text-primary);
-    border-radius: 7px;
-    padding: 7px 12px;
-    font-size: 12px; font-weight: 700;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-  .btn:hover { background: var(--bg-surface-hover); }
-  .btn.primary { background: var(--accent-primary); border-color: var(--accent-primary); }
-  .btn.primary:hover { filter: brightness(1.15); }
-  .btn.danger { color: var(--status-danger); }
-  .btn.small { padding: 5px 10px; font-size: 11px; }
-  .btn:disabled { opacity: .5; cursor: default; }
-
-  input[type="text"], input[type="password"], textarea {
+  input[type="text"], input[type="password"] {
     width: 100%;
     background: var(--bg-input);
     border: 1px solid var(--border-hairline);
-    border-radius: 7px;
+    border-radius: 8px;
     color: var(--text-primary);
-    padding: 9px 11px;
+    padding: 10px 12px;
     font-size: 13px;
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     outline: none;
+    margin-top: 8px;
   }
-  input:focus, textarea:focus { border-color: var(--border-focus); }
+  input:focus { border-color: var(--border-focus); }
 
-  .chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0; }
+  .chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
   .chip {
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 11px; font-weight: 600;
+    font-size: 12px; font-weight: 600;
     padding: 5px 11px; border-radius: 999px;
     border: 1px solid var(--border-subtle);
-    background: var(--bg-surface-elevated);
+    background: var(--bg-surface);
     color: var(--text-muted);
     cursor: pointer;
-    max-width: 240px;
+    max-width: 100%;
   }
   .chip.active { color: var(--accent-sky); border-color: var(--accent-sky); background: rgba(56,189,248,.08); }
 
-  .gauge { margin: 12px 0; }
-  .gauge-head { display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 5px; }
+  .acct {
+    margin-top: 8px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-hairline);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .acct-email { font-weight: 700; font-size: 13px; }
+  .acct-meta { color: var(--text-muted); font-size: 12px; margin-top: 3px; }
+  .acct-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  a { color: var(--accent-sky); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .gauge { margin-top: 14px; }
+  .gauge-head { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
   .gauge-head .name { color: var(--text-secondary); font-weight: 600; }
-  .gauge-head .pct { font-family: ui-monospace, Menlo, monospace; color: var(--text-muted); }
+  .gauge-head .pct { font-family: ui-monospace, Menlo, monospace; color: var(--text-primary); font-weight: 700; }
   .gauge-track { height: 8px; border-radius: 999px; background: var(--bg-input); border: 1px solid var(--border-hairline); overflow: hidden; }
   .gauge-fill { height: 100%; border-radius: 999px; transition: width .4s ease; }
   .gauge-fill.ok { background: var(--status-success); }
   .gauge-fill.mid { background: var(--status-warning); }
   .gauge-fill.low { background: var(--status-danger); }
+  .gauge-reset { color: var(--text-muted); font-size: 11px; margin-top: 4px; }
 
-  .acct {
-    display: flex; align-items: center; gap: 10px;
-    padding: 11px 12px;
-    background: var(--bg-surface-elevated);
-    border: 1px solid var(--border-hairline);
-    border-radius: 8px;
-    margin-top: 8px;
-  }
-  .acct-email { font-weight: 600; font-size: 13px; }
-  .acct-meta { color: var(--text-muted); font-size: 11px; margin-top: 2px; }
-  .acct-badges { display: flex; gap: 6px; flex-wrap: wrap; }
-  a { color: var(--accent-sky); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-
-  .snippet-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0; }
-  pre.snippet {
+  .console {
+    margin-top: 10px;
     background: var(--bg-terminal);
     border: 1px solid var(--border-hairline);
     border-radius: 8px;
-    padding: 12px;
-    font-size: 12px;
-    color: var(--text-code);
-    overflow-x: auto;
-    white-space: pre;
+    padding: 10px 12px;
+    max-height: 340px;
+    overflow-y: auto;
   }
-
   .log-line {
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     font-size: 11.5px;
-    padding: 3px 0;
+    padding: 2px 0;
     color: var(--text-secondary);
-    border-bottom: 1px solid var(--border-hairline);
     display: flex; gap: 10px;
   }
-  .log-line:last-child { border-bottom: none; }
   .log-status { font-weight: 700; min-width: 30px; }
   .log-status.ok { color: var(--status-success); }
   .log-status.err { color: var(--status-danger); }
@@ -213,7 +190,7 @@
 
   #toast {
     position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(20px);
-    background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle);
+    background: var(--bg-surface-hover); border: 1px solid var(--border-subtle);
     color: var(--text-primary); padding: 9px 16px; border-radius: 8px;
     font-size: 12.5px; font-weight: 600;
     opacity: 0; pointer-events: none; transition: all .25s ease;
@@ -224,7 +201,7 @@
   .hidden { display: none !important; }
   .warn-banner {
     margin-top: 10px; padding: 10px 12px; border-radius: 8px;
-    background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.35);
+    background: rgba(245,158,11,.10);
     color: var(--status-warning); font-size: 12px; font-weight: 600;
   }
 </style>
@@ -232,96 +209,110 @@
 <body>
 
 <header>
-  <div class="brand">
-    <div class="brand-mark">a</div>
-    <span class="brand-name">AntiAPI</span>
-    <span class="brand-tag mono">GATEWAY</span>
-  </div>
-  <button class="badge" id="badge-fast" onclick="toggleFastMode()">FAST: --</button>
-  <button class="badge" id="badge-tunnel" onclick="toggleTunnel()">TUNNEL: --</button>
+  <div class="brand-name">AntiAPI</div>
+  <div class="header-status" id="header-status">&#9679; Running</div>
 </header>
 
 <main>
 
-  <!-- SERVER -->
+  <!-- 1. GATEWAY STATUS -->
   <div class="card">
     <div class="card-head">
-      <span class="card-label">Server</span>
-      <span class="badge on">RUNNING</span>
+      <span class="card-label">GATEWAY STATUS</span>
     </div>
-    <div class="big-status" id="srv-accounts-line">-- accounts connected</div>
-    <div class="card-sub" id="srv-model-line">Model: gemini-3.8-flash</div>
-    <div class="endpoint-box">
-      <code class="grow ellip" id="endpoint-url">--</code>
-      <button class="btn small" onclick="copyText(document.getElementById('endpoint-url').textContent, 'Endpoint')">Copy</button>
-    </div>
-  </div>
-
-  <!-- PUBLIC ACCESS / TUNNEL -->
-  <div class="card">
-    <div class="card-head">
-      <span class="card-label">Public Access</span>
-      <span class="badge" id="tunnel-state">OFF</span>
-    </div>
-    <div class="card-sub" id="tunnel-desc">Local only. Start a tunnel to expose this gateway over HTTPS.</div>
-    <div class="endpoint-box hidden" id="tunnel-url-box">
-      <code class="grow ellip" id="tunnel-url">--</code>
-      <button class="btn small" onclick="copyText(document.getElementById('tunnel-url').textContent, 'Public URL')">Copy</button>
-    </div>
-    <div class="warn-banner hidden" id="tunnel-warning"></div>
-    <div class="row" style="margin-top:10px">
-      <button class="btn" id="btn-tunnel" onclick="toggleTunnel()">Start Tunnel</button>
-    </div>
-  </div>
-
-  <!-- QUOTAS -->
-  <div class="card">
-    <div class="card-head">
-      <span class="card-label">Quotas</span>
-      <button class="btn small" onclick="refreshAll()">Refresh &amp; Clear Cooldowns</button>
-    </div>
-    <div class="chip-row" id="quota-chips"></div>
-    <div id="quota-body"><div class="card-sub">No quota data yet.</div></div>
-  </div>
-
-  <!-- ACCOUNTS -->
-  <div class="card">
-    <div class="card-head">
-      <span class="card-label">Accounts</span>
-      <span class="badge info" id="acct-count">0</span>
-    </div>
-    <div id="acct-list"></div>
-    <div style="margin-top:14px">
-      <div class="card-label" style="margin-bottom:8px">Add Account</div>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        <input type="text" id="add-email" placeholder="email (optional, detected after first refresh)" autocomplete="off" />
-        <input type="password" id="add-token" placeholder="refresh token (1//...)" autocomplete="off" />
-        <div class="row">
-          <button class="btn primary" onclick="addAccount()">Add Account</button>
-          <span class="card-sub">Stored locally in ~/.antigravity-api/accounts.json</span>
-        </div>
+    <div class="big-status" id="srv-line">Status: Running</div>
+    <div class="inner-box">
+      <div class="card-label">LOCAL BASE URL</div>
+      <div class="row" style="margin-top:4px">
+        <code class="grow ellip" id="endpoint-url">--</code>
       </div>
     </div>
+    <button class="btn" onclick="copyText(document.getElementById('endpoint-url').textContent, 'Local base URL')">Copy Local Base URL</button>
   </div>
 
-  <!-- CONNECT -->
+  <!-- 2. CLOUDFLARE INGRESS TUNNEL -->
   <div class="card">
     <div class="card-head">
-      <span class="card-label">Connect a Client</span>
+      <span class="card-label">CLOUDFLARE INGRESS TUNNEL</span>
+      <span class="badge off" id="tunnel-state">OFFLINE</span>
     </div>
-    <div class="snippet-tabs" id="snippet-tabs"></div>
-    <pre class="snippet" id="snippet-body"></pre>
-    <div class="row" style="margin-top:10px">
-      <button class="btn small" onclick="copyText(document.getElementById('snippet-body').textContent, 'Snippet')">Copy Snippet</button>
+    <div class="card-sub">Secure public HTTPS ingress for Cursor, remote agents, and external tools.</div>
+    <div class="inner-box hidden" id="tunnel-url-box">
+      <div class="card-label">PUBLIC URL</div>
+      <div class="row" style="margin-top:4px">
+        <code class="grow ellip" id="tunnel-url">--</code>
+      </div>
     </div>
+    <div class="warn-banner hidden" id="tunnel-warning"></div>
+    <button class="btn" id="btn-tunnel" onclick="toggleTunnel()">Start Tunnel</button>
+    <button class="btn hidden" id="btn-copy-public" onclick="copyText(document.getElementById('tunnel-url').textContent, 'Public URL')">Copy Public URL</button>
   </div>
 
-  <!-- LOGS -->
+  <!-- 3. LATENCY ACCELERATOR -->
   <div class="card">
     <div class="card-head">
-      <span class="card-label">Recent Requests</span>
+      <span class="card-label">LATENCY ACCELERATOR</span>
+      <span class="badge off" id="fast-state">DISABLED</span>
     </div>
-    <div id="log-body"><div class="card-sub">No requests yet.</div></div>
+    <div class="big-status" style="font-size:13px;color:var(--text-secondary)" id="fast-line">Fast Mode: Disabled (Standard thinking enabled)</div>
+    <div class="card-sub">Zero-budget thinking mode for Claude &amp; Gemini models for ~2.8x faster initial token stream.</div>
+    <button class="btn" id="btn-fast" onclick="toggleFastMode()">Enable Fast Mode</button>
+  </div>
+
+  <!-- 4. DEVELOPER QUICK CONNECT -->
+  <div class="card">
+    <div class="card-head">
+      <span class="card-label">DEVELOPER QUICK CONNECT</span>
+    </div>
+    <div class="card-sub">Point any OpenAI-compatible client, CLI, or agent directly to your gateway.</div>
+    <button class="btn" onclick="copyEnv()">Copy .env Export</button>
+    <button class="btn" onclick="copyCurl()">Copy curl Test</button>
+  </div>
+
+  <!-- 5. ACCOUNT POOL -->
+  <div class="card">
+    <div class="card-head">
+      <span class="card-label">ACCOUNT POOL</span>
+      <div class="row">
+        <span class="card-sub" id="acct-count" style="margin-top:0">0 active</span>
+        <button class="btn small" onclick="refreshAll()">&#10227; Sync</button>
+      </div>
+    </div>
+    <div id="acct-list"></div>
+  </div>
+
+  <!-- 6. QUOTAS -->
+  <div class="card">
+    <div class="card-head">
+      <span class="card-label">GEMINI PRO &amp; FLASH QUOTA USAGE</span>
+    </div>
+    <div class="card-sub">Live telemetry synced directly from Google Cloud Code upstream.</div>
+    <div class="chip-row" id="quota-chips"></div>
+    <div id="quota-body"><div class="card-sub">No account selected.</div></div>
+  </div>
+
+  <!-- 7. ADD ACCOUNT TO POOL -->
+  <div class="card">
+    <div class="card-head">
+      <span class="card-label">ADD ACCOUNT TO POOL</span>
+    </div>
+    <div class="card-sub">Authorize via Google OAuth or paste a manual refresh token.</div>
+    <button class="btn primary" onclick="startOAuth()">Sign In with Google (Browser OAuth)</button>
+    <input type="text" id="add-email" placeholder="email (optional, detected after first refresh)" autocomplete="off" />
+    <input type="password" id="add-token" placeholder="refresh token (1//...)" autocomplete="off" />
+    <button class="btn" onclick="addAccount()">Add</button>
+  </div>
+
+  <!-- 8. LIVE SERVER CONSOLE -->
+  <div class="card">
+    <div class="card-head">
+      <span class="card-label">LIVE SERVER CONSOLE</span>
+      <div class="row">
+        <button class="btn small" onclick="clearLogs()">Clear</button>
+        <button class="btn small" onclick="copyLogs()">Copy All</button>
+      </div>
+    </div>
+    <div class="console" id="log-body"><div class="card-sub">No requests yet.</div></div>
   </div>
 
 </main>
@@ -342,7 +333,7 @@
   const realFetch = window.fetch.bind(window);
   window.fetch = function (url, opts) {
     const k = localStorage.getItem('antiapi_key');
-    if (k && typeof url === 'string' && (url.startsWith('/api') || url.startsWith('/v1'))) {
+    if (k && typeof url === 'string' && (url.startsWith('/api') || url.startsWith('/v1') || url.startsWith('/oauth'))) {
       opts = opts || {};
       opts.headers = Object.assign({}, opts.headers, { 'Authorization': 'Bearer ' + k });
     }
@@ -352,6 +343,7 @@
 
 let statusData = null;
 let selectedQuotaAccount = null;
+let lastLogs = [];
 let toastTimer = null;
 
 function showToast(msg) {
@@ -377,15 +369,31 @@ async function copyText(text, label) {
   }
 }
 
-function baseURL() {
-  return location.origin;
+function baseURL() { return location.origin; }
+
+function copyEnv() {
+  copyText(
+    'OPENAI_BASE_URL="' + baseURL() + '/v1"\n' +
+    'OPENAI_API_KEY="antigravity"\n' +
+    'HERMES_MODEL="gemini-3.8-flash"',
+    '.env export');
+}
+
+function copyCurl() {
+  copyText(
+    'curl -N ' + baseURL() + '/v1/chat/completions \\\n' +
+    '  -H "Content-Type: application/json" \\\n' +
+    '  -d \'{"model": "gemini-3.8-flash", "messages": [{"role": "user", "content": "Hello!"}], "stream": true}\'',
+    'curl test');
 }
 
 // ---- Fast mode ----
 function updateFastUI(on) {
-  const b = document.getElementById('badge-fast');
-  b.textContent = 'FAST: ' + (on ? 'ON' : 'OFF');
-  b.className = 'badge ' + (on ? 'on' : '');
+  document.getElementById('fast-state').textContent = on ? 'ENABLED' : 'DISABLED';
+  document.getElementById('fast-state').className = 'badge ' + (on ? 'on' : 'off');
+  document.getElementById('fast-line').textContent =
+    'Fast Mode: ' + (on ? 'Enabled (Zero thinking budget)' : 'Disabled (Standard thinking enabled)');
+  document.getElementById('btn-fast').textContent = on ? 'Disable Fast Mode' : 'Enable Fast Mode';
 }
 async function toggleFastMode() {
   try {
@@ -398,39 +406,30 @@ async function toggleFastMode() {
 
 // ---- Tunnel ----
 function updateTunnelUI(active, starting, url, warning) {
-  const badge = document.getElementById('badge-tunnel');
   const state = document.getElementById('tunnel-state');
   const btn = document.getElementById('btn-tunnel');
-  const desc = document.getElementById('tunnel-desc');
   const box = document.getElementById('tunnel-url-box');
+  const copyBtn = document.getElementById('btn-copy-public');
   const warn = document.getElementById('tunnel-warning');
   if (starting) {
-    badge.textContent = 'TUNNEL: ...'; badge.className = 'badge warn';
     state.textContent = 'STARTING'; state.className = 'badge warn';
     btn.textContent = 'Starting...'; btn.disabled = true;
-    desc.textContent = 'Negotiating a Cloudflare edge...';
   } else if (active) {
-    badge.textContent = 'TUNNEL: ON'; badge.className = 'badge on';
     state.textContent = 'LIVE'; state.className = 'badge on';
     btn.textContent = 'Stop Tunnel'; btn.disabled = false;
-    desc.textContent = 'Public HTTPS endpoint is live.';
     if (url) {
       box.classList.remove('hidden');
+      copyBtn.classList.remove('hidden');
       document.getElementById('tunnel-url').textContent = url;
     }
   } else {
-    badge.textContent = 'TUNNEL: OFF'; badge.className = 'badge';
-    state.textContent = 'OFF'; state.className = 'badge';
+    state.textContent = 'OFFLINE'; state.className = 'badge off';
     btn.textContent = 'Start Tunnel'; btn.disabled = false;
-    desc.textContent = 'Local only. Start a tunnel to expose this gateway over HTTPS.';
     box.classList.add('hidden');
+    copyBtn.classList.add('hidden');
   }
-  if (warning) {
-    warn.textContent = warning;
-    warn.classList.remove('hidden');
-  } else {
-    warn.classList.add('hidden');
-  }
+  if (warning) { warn.textContent = warning; warn.classList.remove('hidden'); }
+  else { warn.classList.add('hidden'); }
 }
 async function toggleTunnel() {
   try {
@@ -447,8 +446,8 @@ async function loadStatus() {
     const data = await res.json();
     statusData = data;
     document.getElementById('endpoint-url').textContent = baseURL() + '/v1';
-    document.getElementById('srv-accounts-line').textContent =
-      (data.total || 0) + (data.total === 1 ? ' account' : ' accounts') + ' connected';
+    document.getElementById('srv-line').textContent = 'Status: Running';
+    document.getElementById('acct-count').textContent = (data.total || 0) + ' active';
     updateFastUI(!!data.fast_mode);
     updateTunnelUI(!!data.tunnel_active, !!data.tunnel_starting, data.public_url, data.tunnel_warning);
     renderQuotaChips(data.accounts || []);
@@ -474,12 +473,12 @@ function renderQuotaChips(accounts) {
 function renderQuotas() {
   const body = document.getElementById('quota-body');
   if (!statusData || !selectedQuotaAccount) {
-    body.innerHTML = '<div class="card-sub">No accounts configured.</div>';
+    body.innerHTML = '<div class="card-sub">No account selected.</div>';
     return;
   }
   const sum = statusData.quota_summaries && statusData.quota_summaries[selectedQuotaAccount];
   if (!sum || !sum.groups || sum.groups.length === 0) {
-    body.innerHTML = '<div class="card-sub">No telemetry yet for this account. It refreshes in the background.</div>';
+    body.innerHTML = '<div class="card-sub">Offline. No telemetry yet for this account.</div>';
     return;
   }
   body.innerHTML = '';
@@ -487,12 +486,14 @@ function renderQuotas() {
     (g.buckets || []).forEach(b => {
       const pct = Math.round((b.remainingFraction || 0) * 100);
       const cls = pct > 50 ? 'ok' : (pct > 20 ? 'mid' : 'low');
+      const reset = b.resetTime ? new Date(b.resetTime).toLocaleString() : '--';
       const div = document.createElement('div');
       div.className = 'gauge';
       div.innerHTML =
-        '<div class="gauge-head"><span class="name">' + esc(g.displayName) + ' · ' + esc(b.window || '') +
+        '<div class="gauge-head"><span class="name">' + esc(g.displayName) + ' &middot; ' + esc(b.window || '') +
         '</span><span class="pct">' + pct + '%</span></div>' +
-        '<div class="gauge-track"><div class="gauge-fill ' + cls + '" style="width:' + pct + '%"></div></div>';
+        '<div class="gauge-track"><div class="gauge-fill ' + cls + '" style="width:' + pct + '%"></div></div>' +
+        '<div class="gauge-reset">Resets: ' + esc(reset) + '</div>';
       body.appendChild(div);
     });
   });
@@ -501,7 +502,7 @@ async function refreshAll() {
   try {
     await fetch('/api/refresh', { method: 'POST' });
     showToast('Cooldowns cleared, quotas refreshing');
-    setTimeout(loadStatus, 2500);
+    setTimeout(function () { loadStatus(); loadAccounts(); }, 2500);
   } catch (e) { showToast('Refresh failed'); }
 }
 
@@ -511,7 +512,7 @@ async function loadAccounts() {
     const res = await fetch('/api/accounts');
     const data = await res.json();
     const accs = data.accounts || [];
-    document.getElementById('acct-count').textContent = String(accs.length);
+    document.getElementById('acct-count').textContent = accs.length + ' active';
     const list = document.getElementById('acct-list');
     list.innerHTML = '';
     if (accs.length === 0) {
@@ -525,20 +526,26 @@ async function loadAccounts() {
       if (idx === 0) badges += '<span class="badge info">PRIMARY</span>';
       if (a.isRateLimited) badges += '<span class="badge warn">COOLDOWN</span>';
       if (a.needsValidation) badges += '<span class="badge warn">NEEDS VERIFICATION</span>';
+      if (a.tierStatus) badges += '<span class="badge off">NO ANTIGRAVITY TIER</span>';
       let meta = 'project: ' + esc(a.projectId || 'default');
       if (a.isRateLimited && a.rateLimitedUntil) {
-        meta += ' · until ' + new Date(a.rateLimitedUntil).toLocaleTimeString();
+        meta += ' &middot; until ' + new Date(a.rateLimitedUntil).toLocaleTimeString();
       }
       div.innerHTML =
-        '<div class="grow">' +
-          '<div class="acct-email ellip">' + esc(a.email) + '</div>' +
-          '<div class="acct-meta">' + meta + '</div>' +
-          (a.needsValidation && a.validationUrl
-            ? '<div class="acct-meta"><a href="' + esc(a.validationUrl) + '" target="_blank" rel="noopener">Open verification link</a></div>'
-            : '') +
+        '<div class="row">' +
+          '<div class="grow">' +
+            '<div class="acct-email ellip">' + esc(a.email) + '</div>' +
+            '<div class="acct-meta">' + meta + '</div>' +
+          '</div>' +
+          '<button class="btn small danger">Remove</button>' +
         '</div>' +
-        '<div class="acct-badges">' + badges + '</div>' +
-        '<button class="btn small danger">Remove</button>';
+        (badges ? '<div class="acct-badges">' + badges + '</div>' : '') +
+        (a.tierStatus
+          ? '<div class="warn-banner">' + esc(a.tierStatus) + ' Requests on the production endpoint will 429. Set a GCP project ID or use an account with Antigravity access.</div>'
+          : '') +
+        (a.needsValidation && a.validationUrl
+          ? '<div class="acct-meta" style="margin-top:6px"><a href="' + esc(a.validationUrl) + '" target="_blank" rel="noopener">Open verification link</a></div>'
+          : '');
       div.querySelector('button').onclick = () => removeAccount(a.email);
       list.appendChild(div);
     });
@@ -571,85 +578,28 @@ async function addAccount() {
     loadAccounts(); loadStatus();
   } catch (e) { showToast('Add failed: ' + e.message.slice(0, 80)); }
 }
-
-// ---- Connect snippets ----
-const SNIPPETS = {
-  'curl': (base) => `curl -N ${base}/v1/chat/completions \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "model": "gemini-3.8-flash",
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "stream": true
-  }'`,
-  'Python': (base) => `from openai import OpenAI
-
-client = OpenAI(base_url="${base}/v1", api_key="antigravity")
-
-for chunk in client.chat.completions.create(
-    model="gemini-3.8-flash",
-    messages=[{"role": "user", "content": "Hello!"}],
-    stream=True,
-):
-    print(chunk.choices[0].delta.content or "", end="")`,
-  'Continue.dev': (base) => `~/.continue/config.json
-
-{
-  "models": [{
-    "title": "Gemini 3.8 Flash (AntiAPI)",
-    "provider": "openai",
-    "model": "gemini-3.8-flash",
-    "apiBase": "${base}/v1",
-    "apiKey": "antigravity"
-  }]
-}`,
-  'Codex CLI': (base) => `~/.codex/config.toml
-
-model_provider = "antiapi"
-model = "gemini-3.8-flash"
-
-[model_providers.antiapi]
-name = "AntiAPI"
-base_url = "${base}/v1"
-env_key = "OPENAI_API_KEY"
-wire_api = "responses"`,
-  'Hermes': (base) => `export OPENAI_BASE_URL="${base}/v1"
-export OPENAI_API_KEY="antigravity"
-export HERMES_MODEL="gemini-3.8-flash"`,
-  'Anthropic': (base) => `curl ${base}/v1/messages \\
-  -H "Content-Type: application/json" \\
-  -H "x-api-key: antigravity" \\
-  -H "anthropic-version: 2023-06-01" \\
-  -d '{
-    "model": "claude-sonnet-4-6",
-    "max_tokens": 256,
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'`
-};
-let activeSnippet = 'curl';
-function renderSnippetTabs() {
-  const tabs = document.getElementById('snippet-tabs');
-  tabs.innerHTML = '';
-  Object.keys(SNIPPETS).forEach(k => {
-    const c = document.createElement('button');
-    c.className = 'chip' + (k === activeSnippet ? ' active' : '');
-    c.textContent = k;
-    c.onclick = () => { activeSnippet = k; renderSnippetTabs(); renderSnippet(); };
-    tabs.appendChild(c);
-  });
-}
-function renderSnippet() {
-  document.getElementById('snippet-body').textContent = SNIPPETS[activeSnippet](baseURL());
+function startOAuth() {
+  const k = localStorage.getItem('antiapi_key');
+  window.open('/oauth/login' + (k ? '?key=' + encodeURIComponent(k) : ''), '_blank', 'noopener');
 }
 
-// ---- Logs ----
+// ---- Console ----
 async function loadLogs() {
   try {
     const res = await fetch('/api/logs');
     const data = await res.json();
-    const logs = (data.logs || []).slice(0, 30);
+    let logs = (data.logs || []).slice(0, 50);
+    // After a manual Clear, show only entries newer than the clear point
+    // (the API returns newest-first, so new entries are the overflow count).
+    if (clearedBaseline > 0) {
+      const fresh = Math.max(0, logs.length - clearedBaseline);
+      logs = logs.slice(0, fresh);
+      clearedBaseline = Math.min(clearedBaseline, (data.logs || []).length);
+    }
+    lastLogs = logs;
     const body = document.getElementById('log-body');
     if (logs.length === 0) {
-      body.innerHTML = '<div class="card-sub">No requests yet.</div>';
+      body.innerHTML = '<div class="card-sub">AntiAPI server console initialized. Waiting for requests...</div>';
       return;
     }
     body.innerHTML = '';
@@ -665,6 +615,15 @@ async function loadLogs() {
     });
   } catch (e) { /* keep last */ }
 }
+let clearedBaseline = 0;
+function clearLogs() {
+  clearedBaseline = lastLogs.length;
+  document.getElementById('log-body').innerHTML = '<div class="card-sub">Console cleared.</div>';
+}
+function copyLogs() {
+  const text = lastLogs.map(l => l.status + ' ' + l.method + ' ' + l.path + ' ' + (l.duration || '')).join('\n');
+  copyText(text || 'No requests yet.', 'Console');
+}
 
 function esc(s) {
   return String(s == null ? '' : s)
@@ -673,8 +632,6 @@ function esc(s) {
 }
 
 // ---- boot ----
-renderSnippetTabs();
-renderSnippet();
 loadStatus();
 loadAccounts();
 loadLogs();

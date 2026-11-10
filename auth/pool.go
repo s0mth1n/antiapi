@@ -30,6 +30,7 @@ type Account struct {
 	RateLimitedUntil   time.Time          `json:"rateLimitedUntil,omitempty"`
 	QuarantinedUntil   time.Time          `json:"quarantinedUntil,omitempty"`
 	ValidationURL      string             `json:"validationUrl,omitempty"`
+	TierStatus         string             `json:"tierStatus,omitempty"` // set when loadCodeAssist reports the account is not on the Antigravity tier
 	ConsecutiveErrors  int                `json:"consecutiveErrors,omitempty"`
 	Quotas             map[string]float64 `json:"quotas,omitempty"` // Tier -> percentage
 	LastQuotaSummary   *UserQuotaSummary  `json:"-"`
@@ -331,12 +332,36 @@ func (a *Account) resolveProjectID() {
 
 	var result struct {
 		CloudAICompanionProject string `json:"cloudaicompanionProject"`
+		AllowedTiers            []struct {
+			ID        string `json:"id"`
+			IsDefault bool   `json:"isDefault"`
+		} `json:"allowedTiers"`
+		IneligibleTiers []struct {
+			ReasonCode    string `json:"reasonCode"`
+			ReasonMessage string `json:"reasonMessage"`
+		} `json:"ineligibleTiers"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err == nil && result.CloudAICompanionProject != "" {
-		a.mu.Lock()
-		a.ProjectID = result.CloudAICompanionProject
-		a.mu.Unlock()
-		log.Printf("[Pool] Resolved project for %s: %s", a.Email, a.ProjectID)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err == nil {
+		if result.CloudAICompanionProject != "" {
+			a.mu.Lock()
+			a.ProjectID = result.CloudAICompanionProject
+			a.TierStatus = ""
+			a.mu.Unlock()
+			log.Printf("[Pool] Resolved project for %s: %s", a.Email, a.ProjectID)
+			return
+		}
+		// No project resolved. If Google says the Antigravity/individual tier
+		// is ineligible for this account, every production request will 429
+		// and the quota API will 403. Surface that instead of burning calls.
+		for _, t := range result.IneligibleTiers {
+			if t.ReasonCode == "UNSUPPORTED_CLIENT" || t.ReasonMessage != "" {
+				a.mu.Lock()
+				a.TierStatus = t.ReasonMessage
+				a.mu.Unlock()
+				log.Printf("[Pool] WARNING: %s is not on the Antigravity tier (%s). Production-endpoint requests will 429; add a GCP project ID to accounts.json or use an account with Antigravity access.", a.Email, t.ReasonMessage)
+				break
+			}
+		}
 	}
 }
 
