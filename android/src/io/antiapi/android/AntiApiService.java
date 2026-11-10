@@ -81,14 +81,10 @@ public class AntiApiService extends Service {
     private synchronized void startServer() {
         if (isRunning) return;
 
-        boolean batterySaver = getSharedPreferences("antiapi_prefs", Context.MODE_PRIVATE)
-                .getBoolean("battery_saver", false);
-        if (!batterySaver) {
-            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
-            if (pm != null) {
-                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AntiAPI::ServerWakeLock");
-                wakeLock.acquire();
-            }
+        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        if (pm != null) {
+            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AntiAPI::ServerWakeLock");
+            wakeLock.acquire();
         }
 
         new Thread(this::runServerLoop, "AntiAPI-Server-Thread").start();

@@ -68,8 +68,6 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
     private TextView tvFastModeStatus;
     private TextView tvFastModeBadge;
     private Button btnToggleFastMode;
-    private Button btnToggleBatterySaver;
-    private TextView tvBatterySaverStatus;
     private Button btnCopyEnv;
     private Button btnCopyCurl;
     private Button btnToggle;
@@ -252,12 +250,6 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
         tvFastModeStatus = findViewById(R.id.tv_fast_mode_status);
         tvFastModeBadge = findViewById(R.id.tv_fast_mode_badge);
         btnToggleFastMode = findViewById(R.id.btn_toggle_fast_mode);
-        btnToggleBatterySaver = findViewById(R.id.btn_toggle_battery_saver);
-        tvBatterySaverStatus = findViewById(R.id.tv_battery_saver_status);
-        if (btnToggleBatterySaver != null) {
-            btnToggleBatterySaver.setOnClickListener(v -> toggleBatterySaver());
-        }
-        updateBatterySaverUI();
         btnCopyEnv = findViewById(R.id.btn_copy_env);
         btnCopyCurl = findViewById(R.id.btn_copy_curl);
         btnToggle = findViewById(R.id.btn_toggle);
@@ -568,25 +560,13 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
         }
 
         if (tvSelectedAccountStatus != null) {
-            boolean needsValidation = (meta != null) && meta.optBoolean("needsValidation", false);
-            final String validationUrl = (meta != null) ? meta.optString("validationUrl", "") : "";
-            if (needsValidation && !validationUrl.isEmpty()) {
-                tvSelectedAccountStatus.setText("Needs verification - tap to open");
-                tvSelectedAccountStatus.setTextColor(Color.parseColor("#F59E0B"));
-                tvSelectedAccountStatus.setOnClickListener(v -> {
-                    try {
-                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(validationUrl)));
-                    } catch (Exception ignored) {}
-                });
-            } else if (rateLimited) {
+            if (rateLimited) {
                 String until = meta.optString("rateLimitedUntil", "");
                 tvSelectedAccountStatus.setText("Rate Limited (" + until + ")");
                 tvSelectedAccountStatus.setTextColor(Color.parseColor("#EF4444"));
-                tvSelectedAccountStatus.setOnClickListener(null);
             } else {
                 tvSelectedAccountStatus.setText("Active · Ready");
                 tvSelectedAccountStatus.setTextColor(Color.parseColor("#10B981"));
-                tvSelectedAccountStatus.setOnClickListener(null);
             }
         }
 
@@ -861,30 +841,6 @@ public class MainActivity extends Activity implements AntiApiService.LogListener
             } catch (Exception ignored) {}
             fetchQuotasAsync();
         }).start();
-    }
-
-    private void toggleBatterySaver() {
-        boolean current = getSharedPreferences("antiapi_prefs", Context.MODE_PRIVATE)
-                .getBoolean("battery_saver", false);
-        getSharedPreferences("antiapi_prefs", Context.MODE_PRIVATE)
-                .edit()
-                .putBoolean("battery_saver", !current)
-                .apply();
-        updateBatterySaverUI();
-        Toast.makeText(this, "Applies on next server start", Toast.LENGTH_SHORT).show();
-    }
-
-    private void updateBatterySaverUI() {
-        if (tvBatterySaverStatus == null || btnToggleBatterySaver == null) return;
-        boolean saver = getSharedPreferences("antiapi_prefs", Context.MODE_PRIVATE)
-                .getBoolean("battery_saver", false);
-        if (saver) {
-            tvBatterySaverStatus.setText("Wake Lock: Released (saves battery, may doze)");
-            btnToggleBatterySaver.setText("Disable Battery Saver");
-        } else {
-            tvBatterySaverStatus.setText("Wake Lock: Held (gateway always responsive)");
-            btnToggleBatterySaver.setText("Enable Battery Saver");
-        }
     }
 
     private int dpToPx(int dp) {
