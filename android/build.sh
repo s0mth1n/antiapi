@@ -4,7 +4,7 @@ set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$DIR"
 
-SDK="/opt/android-sdk"
+SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}"
 BUILD_TOOLS="$SDK/build-tools/35.0.0"
 PLATFORM="$SDK/platforms/android-35/android.jar"
 AAPT2="$BUILD_TOOLS/aapt2"
