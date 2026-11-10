@@ -85,20 +85,20 @@ func NewServer() *Server {
 }
 
 func (s *Server) routes() {
-	s.mux.HandleFunc("/v1/chat/completions", s.cors(s.handleChatCompletions))
-	s.mux.HandleFunc("/v1/responses", s.cors(s.handleResponses))
-	s.mux.HandleFunc("/v1/messages", s.cors(s.handleMessages))
+	s.mux.HandleFunc("/v1/chat/completions", s.cors(s.decompress(s.handleChatCompletions)))
+	s.mux.HandleFunc("/v1/responses", s.cors(s.decompress(s.handleResponses)))
+	s.mux.HandleFunc("/v1/messages", s.cors(s.decompress(s.handleMessages)))
 	s.mux.HandleFunc("/v1/models", s.cors(s.handleModels))
 	s.mux.HandleFunc("/v1/models/", s.cors(s.handleModels))
 	s.mux.HandleFunc("/api/status", s.cors(s.handleStatus))
 	s.mux.HandleFunc("/api/accounts", s.cors(s.handleAccounts))
-	s.mux.HandleFunc("/api/accounts/add", s.cors(s.handleAddAccount))
-	s.mux.HandleFunc("/api/accounts/remove", s.cors(s.handleRemoveAccount))
-	s.mux.HandleFunc("/api/accounts/reorder", s.cors(s.handleReorderAccounts))
-	s.mux.HandleFunc("/api/accounts/clear_cooldown", s.cors(s.handleClearCooldown))
-	s.mux.HandleFunc("/api/refresh", s.cors(s.handleClearCooldown))
-	s.mux.HandleFunc("/api/fast_mode", s.cors(s.handleFastMode))
-	s.mux.HandleFunc("/api/tunnel", s.cors(s.handleTunnel))
+	s.mux.HandleFunc("/api/accounts/add", s.cors(s.decompress(s.handleAddAccount)))
+	s.mux.HandleFunc("/api/accounts/remove", s.cors(s.decompress(s.handleRemoveAccount)))
+	s.mux.HandleFunc("/api/accounts/reorder", s.cors(s.decompress(s.handleReorderAccounts)))
+	s.mux.HandleFunc("/api/accounts/clear_cooldown", s.cors(s.decompress(s.handleClearCooldown)))
+	s.mux.HandleFunc("/api/refresh", s.cors(s.decompress(s.handleClearCooldown)))
+	s.mux.HandleFunc("/api/fast_mode", s.cors(s.decompress(s.handleFastMode)))
+	s.mux.HandleFunc("/api/tunnel", s.cors(s.decompress(s.handleTunnel)))
 	s.mux.HandleFunc("/api/logs", s.cors(s.handleLogs))
 	s.mux.HandleFunc("/oauth/login", s.cors(s.handleOAuthLogin))
 	s.mux.HandleFunc("/quota", s.cors(s.handleStatus))
@@ -488,16 +488,13 @@ func (s *Server) handleFastMode(w http.ResponseWriter, r *http.Request) {
 			Enabled  *bool `json:"enabled"`
 			Toggle   bool  `json:"toggle"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
-			if body.Toggle {
-				current := translator.IsGlobalFastMode()
-				translator.SetGlobalFastMode(!current)
-			} else if body.FastMode != nil {
-				translator.SetGlobalFastMode(*body.FastMode)
-			} else if body.Enabled != nil {
-				translator.SetGlobalFastMode(*body.Enabled)
-			}
+		if err := json.NewDecoder(r.Body).Decode(&body); err == nil && body.FastMode != nil {
+			translator.SetGlobalFastMode(*body.FastMode)
+		} else if err == nil && body.Enabled != nil {
+			translator.SetGlobalFastMode(*body.Enabled)
 		} else {
+			// {"toggle":true}, an empty object, or an unreadable body all
+			// mean "flip the current state".
 			current := translator.IsGlobalFastMode()
 			translator.SetGlobalFastMode(!current)
 		}

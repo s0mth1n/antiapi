@@ -247,11 +247,12 @@
     .ctl.warn { color: var(--status-warning); }
     .ctl:disabled { opacity: .5; cursor: default; }
     .tunnel-chip {
-      display: inline-flex; align-items: center;
+      display: inline-block; vertical-align: middle;
       background: var(--bg-input); border: 1px solid var(--border-hairline);
       border-radius: 6px; padding: 5px 10px; cursor: pointer;
       font-family: var(--font-mono); font-size: 11.5px; color: var(--accent-sky);
       max-width: 320px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
 
     .wrap {
@@ -634,6 +635,7 @@ function updateTunnelUI(active, starting, url, warning) {
   document.querySelectorAll('.js-tunnel-url').forEach(el => {
     if (active && url) {
       el.textContent = url;
+      el.title = url + ' - click to copy';
       el.classList.remove('hidden');
       el.onclick = () => copyText(url, 'Public URL');
     } else {
