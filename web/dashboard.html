@@ -25,6 +25,7 @@
     --text-secondary: #CBD5E1;
     --text-muted: #94A3B8;
     --text-code: #E2E8F0;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -35,8 +36,9 @@
     line-height: 1.45;
     min-height: 100vh;
   }
-  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .mono { font-family: var(--font-mono); }
 
+  /* ---------- shared bits (both layouts) ---------- */
   header {
     background: var(--bg-header);
     border-bottom: 1px solid var(--border-hairline);
@@ -44,76 +46,15 @@
   }
   .brand-name { font-weight: 700; font-size: 17px; }
   .header-status {
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 12px; font-weight: 700;
     color: var(--status-success);
   }
 
-  main {
-    max-width: 720px;
-    margin: 0 auto;
-    padding: 12px 16px 48px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  /* Desktop: left sidebar with the app's three tabs (Gateway | Quotas | Console) */
-  .sidenav { display: none; }
-  @media (max-width: 1023px) {
-    main > section { display: contents; }
-  }
-  @media (min-width: 1024px) {
-    header { display: none; }
-    body { display: flex; }
-    .sidenav {
-      display: flex; flex-direction: column; gap: 4px;
-      position: fixed; left: 0; top: 0; bottom: 0; width: 220px;
-      background: var(--bg-header); border-right: 1px solid var(--border-hairline);
-      padding: 20px 12px;
-    }
-    .sidenav .brand-name { font-size: 17px; font-weight: 700; padding: 0 10px; }
-    .sidenav .header-status { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--status-success); padding: 2px 10px 18px; }
-    .nav-item {
-      font-family: var(--font-mono); font-size: 12px; font-weight: 700;
-      letter-spacing: 0.08em; text-transform: uppercase;
-      color: var(--text-secondary); background: none; border: none; cursor: pointer;
-      text-align: left; padding: 10px; border-radius: 8px; border-left: 2px solid transparent;
-    }
-    .nav-item:hover { color: var(--text-primary); }
-    .nav-item.active { color: var(--accent-sky); background: var(--bg-surface-elevated); border-left-color: var(--accent-sky); }
-    main {
-      margin-left: 220px; width: calc(100% - 220px);
-      max-width: none; display: block; padding: 24px 32px 64px;
-    }
-    main > section { display: none; max-width: 1160px; margin: 0 auto; width: 100%; }
-    main > section.active { display: grid; gap: 12px; }
-    main > section[data-tab="gateway"].active { grid-template-columns: 1fr 1fr; align-items: stretch; }
-    main > section[data-tab="quotas"].active { grid-template-columns: 1fr 1fr; align-items: stretch; }
-    main > section[data-tab="quotas"].active .card.wide { grid-column: 1 / -1; }
-    main > section[data-tab="console"].active { grid-template-columns: 1fr; }
-  }
-  .card {
-    background: var(--bg-surface-elevated);
-    border: 1px solid var(--border-hairline);
-    border-radius: 10px;
-    padding: 16px;
-  }
-  .card-head {
-    display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  }
-  .card-label {
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 12px; font-weight: 700; letter-spacing: 0.06em;
-    color: var(--text-muted);
-  }
-  .card-sub { color: var(--text-muted); font-size: 12px; margin-top: 6px; }
-  .big-status { font-size: 17px; font-weight: 700; color: var(--text-primary); margin-top: 6px; }
-
   .badge {
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 12px; font-weight: 700;
-    padding: 3px 8px; border-radius: 5px;
+    font-family: var(--font-mono);
+    font-size: 11px; font-weight: 700;
+    padding: 2px 7px; border-radius: 5px;
     white-space: nowrap;
   }
   .badge.on { color: var(--status-success); background: rgba(16,185,129,.10); }
@@ -121,14 +62,10 @@
   .badge.warn { color: var(--status-warning); background: rgba(245,158,11,.10); }
   .badge.info { color: var(--accent-sky); background: rgba(56,189,248,.10); }
 
-  .inner-box {
-    margin-top: 12px;
-    background: var(--bg-surface);
-    border: 1px solid var(--border-hairline);
-    border-radius: 8px;
-    padding: 12px;
-  }
-  .inner-box code { color: var(--text-code); font-size: 13px; word-break: break-all; }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .grow { flex: 1; min-width: 0; }
+  .ellip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hidden { display: none !important; }
 
   .btn {
     width: 100%;
@@ -147,10 +84,6 @@
   .btn.danger { color: var(--status-danger); }
   .btn:disabled { opacity: .5; cursor: default; }
 
-  .row { display: flex; align-items: center; gap: 8px; }
-  .grow { flex: 1; min-width: 0; }
-  .ellip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
   input[type="text"], input[type="password"] {
     width: 100%;
     background: var(--bg-input);
@@ -159,15 +92,14 @@
     color: var(--text-primary);
     padding: 10px 12px;
     font-size: 13px;
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-family: var(--font-mono);
     outline: none;
     margin-top: 8px;
   }
   input:focus { border-color: var(--border-focus); }
 
-  .chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
   .chip {
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 12px; font-weight: 600;
     padding: 5px 11px; border-radius: 999px;
     border: 1px solid var(--border-subtle);
@@ -178,51 +110,17 @@
   }
   .chip.active { color: var(--accent-sky); border-color: var(--accent-sky); background: rgba(56,189,248,.08); }
 
-  .acct {
-    margin-top: 8px;
-    background: var(--bg-surface);
-    border: 1px solid var(--border-hairline);
-    border-radius: 8px;
-    padding: 12px;
-  }
-  .acct-email { font-weight: 700; font-size: 13px; }
-  .acct-meta { color: var(--text-muted); font-size: 12px; margin-top: 3px; }
-  .acct-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
-  a { color: var(--accent-sky); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-
-  .gauge { margin-top: 14px; }
-  .gauge-head { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
-  .gauge-head .name { color: var(--text-secondary); font-weight: 600; }
-  .gauge-head .pct { font-family: ui-monospace, Menlo, monospace; color: var(--text-primary); font-weight: 700; }
-  .gauge-track { height: 8px; border-radius: 999px; background: var(--bg-input); border: 1px solid var(--border-hairline); overflow: hidden; }
+  .gauge-track { height: 6px; border-radius: 999px; background: var(--bg-input); border: 1px solid var(--border-hairline); overflow: hidden; }
   .gauge-fill { height: 100%; border-radius: 999px; transition: width .4s ease; }
   .gauge-fill.ok { background: var(--status-success); }
   .gauge-fill.mid { background: var(--status-warning); }
   .gauge-fill.low { background: var(--status-danger); }
-  .gauge-reset { color: var(--text-muted); font-size: 11px; margin-top: 4px; }
 
-  .console {
-    margin-top: 10px;
-    background: var(--bg-terminal);
-    border: 1px solid var(--border-hairline);
-    border-radius: 8px;
-    padding: 10px 12px;
-    max-height: 340px;
-    overflow-y: auto;
+  .warn-banner {
+    margin-top: 10px; padding: 10px 12px; border-radius: 8px;
+    background: rgba(245,158,11,.10);
+    color: var(--status-warning); font-size: 12px; font-weight: 600;
   }
-  .log-line {
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 11.5px;
-    padding: 2px 0;
-    color: var(--text-secondary);
-    display: flex; gap: 10px;
-  }
-  .log-status { font-weight: 700; min-width: 30px; }
-  .log-status.ok { color: var(--status-success); }
-  .log-status.err { color: var(--status-danger); }
-  .log-path { flex: 1; min-width: 0; }
-  .log-time { color: var(--text-muted); }
 
   #toast {
     position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(20px);
@@ -234,62 +132,244 @@
   }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  .hidden { display: none !important; }
-  .warn-banner {
-    margin-top: 10px; padding: 10px 12px; border-radius: 8px;
-    background: rgba(245,158,11,.10);
-    color: var(--status-warning); font-size: 12px; font-weight: 600;
+  a { color: var(--accent-sky); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ---------- phone layout (unchanged) ---------- */
+  .mobile-only { display: block; }
+  .desk { display: none; }
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 12px 16px 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .card {
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-hairline);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .card-label {
+    font-family: var(--font-mono);
+    font-size: 12px; font-weight: 700; letter-spacing: 0.06em;
+    color: var(--text-muted);
+  }
+  .card-sub { color: var(--text-muted); font-size: 12px; margin-top: 6px; }
+  .big-status { font-size: 17px; font-weight: 700; color: var(--text-primary); margin-top: 6px; }
+  .inner-box {
+    margin-top: 12px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-hairline);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .inner-box code { color: var(--text-code); font-size: 13px; word-break: break-all; }
+  .chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .acct {
+    margin-top: 8px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-hairline);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .acct-email { font-weight: 700; font-size: 13px; }
+  .acct-meta { color: var(--text-muted); font-size: 12px; margin-top: 3px; }
+  .acct-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .gauge { margin-top: 14px; }
+  .gauge-head { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
+  .gauge-head .name { color: var(--text-secondary); font-weight: 600; }
+  .gauge-head .pct { font-family: var(--font-mono); color: var(--text-primary); font-weight: 700; }
+  .gauge-reset { color: var(--text-muted); font-size: 11px; margin-top: 4px; }
+  .console {
+    margin-top: 10px;
+    background: var(--bg-terminal);
+    border: 1px solid var(--border-hairline);
+    border-radius: 8px;
+    padding: 10px 12px;
+    max-height: 340px;
+    overflow-y: auto;
+  }
+  .log-line {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    padding: 2px 0;
+    color: var(--text-secondary);
+    display: flex; gap: 10px;
+  }
+  .log-status { font-weight: 700; min-width: 30px; }
+  .log-status.ok { color: var(--status-success); }
+  .log-status.err { color: var(--status-danger); }
+  .log-path { flex: 1; min-width: 0; }
+  .log-time { color: var(--text-muted); }
+
+  /* ---------- desktop layout (>=1024px) ---------- */
+  @media (min-width: 1024px) {
+    .mobile-only { display: none; }
+    .desk { display: block; }
+
+    .topbar {
+      position: sticky; top: 0; z-index: 20;
+      display: flex; align-items: center; gap: 16px;
+      height: 54px; padding: 0 24px;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border-hairline);
+    }
+    .topbar .brand-name { font-size: 15px; }
+    .topbar .header-status { display: flex; align-items: center; gap: 6px; }
+    .topbar .sep { width: 1px; height: 22px; background: var(--border-hairline); }
+    .endpoint-chip {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--bg-input); border: 1px solid var(--border-hairline);
+      border-radius: 6px; padding: 5px 10px; cursor: pointer;
+    }
+    .endpoint-chip code { font-family: var(--font-mono); font-size: 12px; color: var(--text-code); }
+    .endpoint-chip .copy-hint { font-size: 11px; color: var(--text-muted); }
+    .endpoint-chip:hover { border-color: var(--border-subtle); }
+    .topbar .spacer { flex: 1; }
+    .ctl {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      border-radius: 6px; padding: 6px 12px;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      white-space: nowrap;
+    }
+    .ctl:hover { color: var(--text-primary); border-color: var(--border-focus); }
+    .ctl .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); }
+    .ctl.on .dot { background: var(--status-success); }
+    .ctl.on { color: var(--status-success); }
+    .ctl.warn .dot { background: var(--status-warning); }
+    .ctl.warn { color: var(--status-warning); }
+    .ctl:disabled { opacity: .5; cursor: default; }
+    .tunnel-chip {
+      display: inline-flex; align-items: center;
+      background: var(--bg-input); border: 1px solid var(--border-hairline);
+      border-radius: 6px; padding: 5px 10px; cursor: pointer;
+      font-family: var(--font-mono); font-size: 11.5px; color: var(--accent-sky);
+      max-width: 320px;
+    }
+
+    .wrap {
+      max-width: 1240px; margin: 0 auto;
+      padding: 24px 32px 56px;
+      display: flex; flex-direction: column; gap: 20px;
+    }
+    .panel {
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-hairline);
+      border-radius: 8px;
+    }
+    .panel-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border-hairline);
+    }
+    .panel-title {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .panel-tools { display: flex; align-items: center; gap: 8px; }
+
+    /* quota strip */
+    .quota-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+    .qstat { padding: 16px 18px; border-right: 1px solid var(--border-hairline); }
+    .qstat:last-child { border-right: none; }
+    .qstat .q-label { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+    .qstat .q-val {
+      font-family: var(--font-mono);
+      font-size: 26px; font-weight: 700; color: var(--text-primary);
+      margin: 6px 0 8px;
+    }
+    .qstat .q-val .q-unit { font-size: 14px; color: var(--text-muted); }
+    .qstat .q-reset { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+
+    /* accounts table */
+    .atable { width: 100%; border-collapse: collapse; }
+    .atable th {
+      text-align: left; font-size: 11px; font-weight: 700; letter-spacing: 0.07em;
+      text-transform: uppercase; color: var(--text-muted);
+      padding: 10px 18px 8px; border-bottom: 1px solid var(--border-hairline);
+    }
+    .atable td { padding: 11px 18px; border-bottom: 1px solid var(--border-hairline); vertical-align: middle; }
+    .atable tr:last-child td { border-bottom: none; }
+    .atable .a-email { font-weight: 600; font-size: 13px; }
+    .atable .a-badges { display: inline-flex; gap: 5px; margin-left: 8px; vertical-align: 1px; }
+    .atable .a-proj { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
+    .atable .a-act { text-align: right; }
+    .linkbtn {
+      background: none; border: none; cursor: pointer;
+      color: var(--status-danger); font-size: 12px; font-weight: 600; padding: 2px 4px;
+    }
+    .linkbtn:hover { text-decoration: underline; }
+    .addrow {
+      display: flex; gap: 8px; align-items: center;
+      padding: 12px 18px; border-top: 1px solid var(--border-hairline);
+      background: var(--bg-surface);
+      border-radius: 0 0 8px 8px;
+    }
+    .addrow input { margin-top: 0; }
+    .addrow input[type="text"] { flex: 1; }
+    .addrow input[type="password"] { flex: 1.6; }
+    .addrow .btn { margin-top: 0; width: auto; padding: 9px 14px; flex: none; white-space: nowrap; }
+    .addrow .or { flex: none; }
+    .addrow .or { color: var(--text-muted); font-size: 12px; }
+
+    /* connect strip */
+    .connect-strip {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      padding: 12px 18px;
+    }
+    .connect-strip code { font-family: var(--font-mono); font-size: 12px; color: var(--text-code); }
+    .connect-strip .btn { margin-top: 0; width: auto; padding: 7px 14px; }
+
+    /* console */
+    .desk .console {
+      margin-top: 0; border: none; border-radius: 0 0 8px 8px;
+      max-height: 420px; min-height: 180px;
+    }
+    .desk .log-line { font-size: 12px; padding: 2.5px 0; }
   }
 </style>
 </head>
 <body>
 
+<!-- ================= PHONE LAYOUT (unchanged) ================= -->
+<div class="mobile-only">
 <header>
   <div class="brand-name">AntiAPI</div>
-  <div class="header-status" id="header-status">&#9679; Running</div>
+  <div class="header-status js-srv-status">&#9679; Running</div>
 </header>
 
-<nav class="sidenav" aria-label="Sections">
-  <div class="brand-name">AntiAPI</div>
-  <div class="header-status" id="sidenav-status">&#9679; Running</div>
-  <button class="nav-item active" data-tab="gateway" onclick="selectTab('gateway')">Gateway</button>
-  <button class="nav-item" data-tab="quotas" onclick="selectTab('quotas')">Quotas</button>
-  <button class="nav-item" data-tab="console" onclick="selectTab('console')">Console</button>
-</nav>
-
 <main>
-
-  <section data-tab="gateway" class="active">
   <!-- 1. GATEWAY STATUS -->
   <div class="card">
-    <div class="card-head">
-      <span class="card-label">GATEWAY STATUS</span>
-    </div>
+    <div class="card-head"><span class="card-label">GATEWAY STATUS</span></div>
     <div class="big-status" id="srv-line">Status: Running</div>
     <div class="inner-box">
       <div class="card-label">LOCAL BASE URL</div>
-      <div class="row" style="margin-top:4px">
-        <code class="grow ellip" id="endpoint-url">--</code>
-      </div>
+      <div class="row" style="margin-top:4px"><code class="grow ellip js-endpoint">--</code></div>
     </div>
-    <button class="btn" onclick="copyText(document.getElementById('endpoint-url').textContent, 'Local base URL')">Copy Local Base URL</button>
+    <button class="btn" onclick="copyEndpoint()">Copy Local Base URL</button>
   </div>
 
   <!-- 2. CLOUDFLARE INGRESS TUNNEL -->
   <div class="card">
     <div class="card-head">
       <span class="card-label">CLOUDFLARE INGRESS TUNNEL</span>
-      <span class="badge off" id="tunnel-state">OFFLINE</span>
+      <span class="badge off js-tunnel-state">OFFLINE</span>
     </div>
     <div class="card-sub">Secure public HTTPS ingress for Cursor, remote agents, and external tools.</div>
     <div class="inner-box hidden" id="tunnel-url-box">
       <div class="card-label">PUBLIC URL</div>
-      <div class="row" style="margin-top:4px">
-        <code class="grow ellip" id="tunnel-url">--</code>
-      </div>
+      <div class="row" style="margin-top:4px"><code class="grow ellip" id="tunnel-url">--</code></div>
     </div>
     <div class="warn-banner hidden" id="tunnel-warning"></div>
-    <button class="btn" id="btn-tunnel" onclick="toggleTunnel()">Start Tunnel</button>
+    <button class="btn js-tunnel-btn" onclick="toggleTunnel()">Start Tunnel</button>
     <button class="btn hidden" id="btn-copy-public" onclick="copyText(document.getElementById('tunnel-url').textContent, 'Public URL')">Copy Public URL</button>
   </div>
 
@@ -297,31 +377,27 @@
   <div class="card">
     <div class="card-head">
       <span class="card-label">LATENCY ACCELERATOR</span>
-      <span class="badge off" id="fast-state">DISABLED</span>
+      <span class="badge off js-fast-state">DISABLED</span>
     </div>
     <div class="big-status" style="font-size:13px;color:var(--text-secondary)" id="fast-line">Fast Mode: Disabled (Standard thinking enabled)</div>
     <div class="card-sub">Zero-budget thinking mode for Claude &amp; Gemini models for ~2.8x faster initial token stream.</div>
-    <button class="btn" id="btn-fast" onclick="toggleFastMode()">Enable Fast Mode</button>
+    <button class="btn js-fast-btn" onclick="toggleFastMode()">Enable Fast Mode</button>
   </div>
 
   <!-- 4. DEVELOPER QUICK CONNECT -->
   <div class="card">
-    <div class="card-head">
-      <span class="card-label">DEVELOPER QUICK CONNECT</span>
-    </div>
+    <div class="card-head"><span class="card-label">DEVELOPER QUICK CONNECT</span></div>
     <div class="card-sub">Point any OpenAI-compatible client, CLI, or agent directly to your gateway.</div>
     <button class="btn" onclick="copyEnv()">Copy .env Export</button>
     <button class="btn" onclick="copyCurl()">Copy curl Test</button>
   </div>
 
-  </section>
-  <section data-tab="quotas">
   <!-- 5. ACCOUNT POOL -->
   <div class="card">
     <div class="card-head">
       <span class="card-label">ACCOUNT POOL</span>
       <div class="row">
-        <span class="card-sub" id="acct-count" style="margin-top:0">0 active</span>
+        <span class="card-sub js-acct-count" style="margin-top:0">0 active</span>
         <button class="btn small" onclick="refreshAll()">&#10227; Sync</button>
       </div>
     </div>
@@ -330,19 +406,15 @@
 
   <!-- 6. QUOTAS -->
   <div class="card">
-    <div class="card-head">
-      <span class="card-label">GEMINI PRO &amp; FLASH QUOTA USAGE</span>
-    </div>
+    <div class="card-head"><span class="card-label">GEMINI PRO &amp; FLASH QUOTA USAGE</span></div>
     <div class="card-sub">Live telemetry synced directly from Google Cloud Code upstream.</div>
-    <div class="chip-row" id="quota-chips"></div>
+    <div class="chip-row js-quota-chips"></div>
     <div id="quota-body"><div class="card-sub">No account selected.</div></div>
   </div>
 
   <!-- 7. ADD ACCOUNT TO POOL -->
-  <div class="card wide">
-    <div class="card-head">
-      <span class="card-label">ADD ACCOUNT TO POOL</span>
-    </div>
+  <div class="card">
+    <div class="card-head"><span class="card-label">ADD ACCOUNT TO POOL</span></div>
     <div class="card-sub">Authorize via Google OAuth or paste a manual refresh token.</div>
     <button class="btn primary" onclick="startOAuth()">Sign In with Google (Browser OAuth)</button>
     <input type="text" id="add-email" placeholder="email (optional, detected after first refresh)" autocomplete="off" />
@@ -350,8 +422,6 @@
     <button class="btn" onclick="addAccount()">Add</button>
   </div>
 
-  </section>
-  <section data-tab="console">
   <!-- 8. LIVE SERVER CONSOLE -->
   <div class="card">
     <div class="card-head">
@@ -361,11 +431,84 @@
         <button class="btn small" onclick="copyLogs()">Copy All</button>
       </div>
     </div>
-    <div class="console" id="log-body"><div class="card-sub">No requests yet.</div></div>
+    <div class="console js-log-body"><div class="card-sub">No requests yet.</div></div>
   </div>
-  </section>
-
 </main>
+</div>
+
+<!-- ================= DESKTOP LAYOUT ================= -->
+<div class="desk">
+  <div class="topbar">
+    <span class="brand-name">AntiAPI</span>
+    <span class="header-status js-srv-status">&#9679; Running</span>
+    <span class="sep"></span>
+    <span class="endpoint-chip" onclick="copyEndpoint()" title="Copy base URL">
+      <code class="js-endpoint">--</code>
+      <span class="copy-hint">copy</span>
+    </span>
+    <span class="spacer"></span>
+    <span class="tunnel-chip hidden js-tunnel-url" title="Copy public URL"></span>
+    <button class="ctl js-tunnel-ctl" onclick="toggleTunnel()"><span class="dot"></span><span class="js-tunnel-ctl-label">Tunnel</span></button>
+    <button class="ctl js-fast-ctl" onclick="toggleFastMode()"><span class="dot"></span>Fast Mode</button>
+    <button class="ctl" onclick="refreshAll()" title="Sync accounts and quotas">&#10227; Sync</button>
+  </div>
+
+  <div class="wrap">
+
+    <!-- Quota strip -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">Quota</span>
+        <div class="panel-tools chip-row js-quota-chips" style="margin-top:0"></div>
+      </div>
+      <div class="quota-grid js-quota-strip">
+        <div class="qstat"><div class="q-label">Loading telemetry...</div></div>
+      </div>
+    </div>
+
+    <!-- Accounts -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">Accounts</span>
+        <div class="panel-tools"><span class="card-sub js-acct-count" style="margin-top:0">0 active</span></div>
+      </div>
+      <table class="atable">
+        <thead><tr><th>Account</th><th>Project</th><th>Cooldown</th><th class="a-act">Actions</th></tr></thead>
+        <tbody id="acct-table-body"></tbody>
+      </table>
+      <div class="addrow">
+        <button class="btn primary" onclick="startOAuth()">Sign In with Google</button>
+        <span class="or">or</span>
+        <input type="text" id="d-add-email" placeholder="email (optional)" autocomplete="off" />
+        <input type="password" id="d-add-token" placeholder="refresh token (1//...)" autocomplete="off" />
+        <button class="btn" onclick="addAccount(true)">Add</button>
+      </div>
+    </div>
+
+    <!-- Connect -->
+    <div class="panel connect-strip">
+      <span class="panel-title" style="margin-right:4px">Connect</span>
+      <code class="js-endpoint">--</code>
+      <span class="spacer" style="flex:1"></span>
+      <button class="btn" onclick="copyEndpoint()">Copy Base URL</button>
+      <button class="btn" onclick="copyEnv()">Copy .env Export</button>
+      <button class="btn" onclick="copyCurl()">Copy curl Test</button>
+    </div>
+
+    <!-- Console -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">Console</span>
+        <div class="panel-tools">
+          <button class="btn small" onclick="clearLogs()">Clear</button>
+          <button class="btn small" onclick="copyLogs()">Copy All</button>
+        </div>
+      </div>
+      <div class="console js-log-body"><div class="card-sub">No requests yet.</div></div>
+    </div>
+
+  </div>
+</div>
 
 <div id="toast"></div>
 
@@ -396,6 +539,8 @@ let selectedQuotaAccount = null;
 let lastLogs = [];
 let toastTimer = null;
 
+function setText(sel, text) { document.querySelectorAll(sel).forEach(el => { el.textContent = text; }); }
+
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -420,6 +565,7 @@ async function copyText(text, label) {
 }
 
 function baseURL() { return location.origin; }
+function copyEndpoint() { copyText(baseURL() + '/v1', 'Local base URL'); }
 
 function copyEnv() {
   copyText(
@@ -439,11 +585,12 @@ function copyCurl() {
 
 // ---- Fast mode ----
 function updateFastUI(on) {
-  document.getElementById('fast-state').textContent = on ? 'ENABLED' : 'DISABLED';
-  document.getElementById('fast-state').className = 'badge ' + (on ? 'on' : 'off');
-  document.getElementById('fast-line').textContent =
-    'Fast Mode: ' + (on ? 'Enabled (Zero thinking budget)' : 'Disabled (Standard thinking enabled)');
-  document.getElementById('btn-fast').textContent = on ? 'Disable Fast Mode' : 'Enable Fast Mode';
+  setText('.js-fast-state', on ? 'ENABLED' : 'DISABLED');
+  document.querySelectorAll('.js-fast-state').forEach(el => { el.className = 'badge js-fast-state ' + (on ? 'on' : 'off'); });
+  const line = document.getElementById('fast-line');
+  if (line) line.textContent = 'Fast Mode: ' + (on ? 'Enabled (Zero thinking budget)' : 'Disabled (Standard thinking enabled)');
+  setText('.js-fast-btn', on ? 'Disable Fast Mode' : 'Enable Fast Mode');
+  document.querySelectorAll('.js-fast-ctl').forEach(el => { el.classList.toggle('on', on); });
 }
 async function toggleFastMode() {
   try {
@@ -456,30 +603,43 @@ async function toggleFastMode() {
 
 // ---- Tunnel ----
 function updateTunnelUI(active, starting, url, warning) {
-  const state = document.getElementById('tunnel-state');
-  const btn = document.getElementById('btn-tunnel');
+  document.querySelectorAll('.js-tunnel-state').forEach(el => {
+    el.textContent = starting ? 'STARTING' : (active ? 'LIVE' : 'OFFLINE');
+    el.className = 'badge js-tunnel-state ' + (starting ? 'warn' : (active ? 'on' : 'off'));
+  });
+  document.querySelectorAll('.js-tunnel-btn').forEach(btn => {
+    btn.textContent = starting ? 'Starting...' : (active ? 'Stop Tunnel' : 'Start Tunnel');
+    btn.disabled = !!starting;
+  });
   const box = document.getElementById('tunnel-url-box');
   const copyBtn = document.getElementById('btn-copy-public');
   const warn = document.getElementById('tunnel-warning');
-  if (starting) {
-    state.textContent = 'STARTING'; state.className = 'badge warn';
-    btn.textContent = 'Starting...'; btn.disabled = true;
-  } else if (active) {
-    state.textContent = 'LIVE'; state.className = 'badge on';
-    btn.textContent = 'Stop Tunnel'; btn.disabled = false;
-    if (url) {
-      box.classList.remove('hidden');
-      copyBtn.classList.remove('hidden');
-      document.getElementById('tunnel-url').textContent = url;
-    }
+  if (active && url) {
+    box.classList.remove('hidden');
+    copyBtn.classList.remove('hidden');
+    document.getElementById('tunnel-url').textContent = url;
   } else {
-    state.textContent = 'OFFLINE'; state.className = 'badge off';
-    btn.textContent = 'Start Tunnel'; btn.disabled = false;
     box.classList.add('hidden');
     copyBtn.classList.add('hidden');
   }
   if (warning) { warn.textContent = warning; warn.classList.remove('hidden'); }
   else { warn.classList.add('hidden'); }
+  // desktop topbar control
+  document.querySelectorAll('.js-tunnel-ctl').forEach(el => {
+    el.classList.toggle('on', !!active);
+    el.classList.toggle('warn', !!starting);
+    el.disabled = !!starting;
+  });
+  setText('.js-tunnel-ctl-label', starting ? 'Starting' : 'Tunnel');
+  document.querySelectorAll('.js-tunnel-url').forEach(el => {
+    if (active && url) {
+      el.textContent = url;
+      el.classList.remove('hidden');
+      el.onclick = () => copyText(url, 'Public URL');
+    } else {
+      el.classList.add('hidden');
+    }
+  });
 }
 async function toggleTunnel() {
   try {
@@ -495,9 +655,10 @@ async function loadStatus() {
     const res = await fetch('/api/status');
     const data = await res.json();
     statusData = data;
-    document.getElementById('endpoint-url').textContent = baseURL() + '/v1';
-    document.getElementById('srv-line').textContent = 'Status: Running';
-    document.getElementById('acct-count').textContent = (data.total || 0) + ' active';
+    setText('.js-endpoint', baseURL() + '/v1');
+    const line = document.getElementById('srv-line');
+    if (line) line.textContent = 'Status: Running';
+    setText('.js-acct-count', (data.total || 0) + ' active');
     updateFastUI(!!data.fast_mode);
     updateTunnelUI(!!data.tunnel_active, !!data.tunnel_starting, data.public_url, data.tunnel_warning);
     renderQuotaChips(data.accounts || []);
@@ -507,46 +668,82 @@ async function loadStatus() {
 
 // ---- Quotas ----
 function renderQuotaChips(accounts) {
-  const row = document.getElementById('quota-chips');
-  row.innerHTML = '';
   if (!selectedQuotaAccount || !accounts.includes(selectedQuotaAccount)) {
     selectedQuotaAccount = accounts[0] || null;
   }
-  accounts.forEach(email => {
-    const c = document.createElement('button');
-    c.className = 'chip ellip' + (email === selectedQuotaAccount ? ' active' : '');
-    c.textContent = email;
-    c.onclick = () => { selectedQuotaAccount = email; renderQuotaChips(accounts); renderQuotas(); };
-    row.appendChild(c);
-  });
-}
-function renderQuotas() {
-  const body = document.getElementById('quota-body');
-  if (!statusData || !selectedQuotaAccount) {
-    body.innerHTML = '<div class="card-sub">No account selected.</div>';
-    return;
-  }
-  const sum = statusData.quota_summaries && statusData.quota_summaries[selectedQuotaAccount];
-  if (!sum || !sum.groups || sum.groups.length === 0) {
-    body.innerHTML = '<div class="card-sub">Offline. No telemetry yet for this account.</div>';
-    return;
-  }
-  body.innerHTML = '';
-  sum.groups.forEach(g => {
-    (g.buckets || []).forEach(b => {
-      const pct = Math.round((b.remainingFraction || 0) * 100);
-      const cls = pct > 50 ? 'ok' : (pct > 20 ? 'mid' : 'low');
-      const reset = b.resetTime ? new Date(b.resetTime).toLocaleString() : '--';
-      const div = document.createElement('div');
-      div.className = 'gauge';
-      div.innerHTML =
-        '<div class="gauge-head"><span class="name">' + esc(g.displayName) + ' &middot; ' + esc(b.window || '') +
-        '</span><span class="pct">' + pct + '%</span></div>' +
-        '<div class="gauge-track"><div class="gauge-fill ' + cls + '" style="width:' + pct + '%"></div></div>' +
-        '<div class="gauge-reset">Resets: ' + esc(reset) + '</div>';
-      body.appendChild(div);
+  document.querySelectorAll('.js-quota-chips').forEach(row => {
+    row.innerHTML = '';
+    accounts.forEach(email => {
+      const c = document.createElement('button');
+      c.className = 'chip ellip' + (email === selectedQuotaAccount ? ' active' : '');
+      c.textContent = email;
+      c.onclick = () => { selectedQuotaAccount = email; renderQuotaChips(accounts); renderQuotas(); };
+      row.appendChild(c);
     });
   });
+}
+function quotaBuckets() {
+  if (!statusData || !selectedQuotaAccount) return null;
+  const sum = statusData.quota_summaries && statusData.quota_summaries[selectedQuotaAccount];
+  if (!sum || !sum.groups || sum.groups.length === 0) return null;
+  const out = [];
+  sum.groups.forEach(g => {
+    (g.buckets || []).forEach(b => {
+      out.push({
+        name: g.displayName + ' · ' + (b.window || ''),
+        pct: Math.round((b.remainingFraction || 0) * 100),
+        reset: b.resetTime ? new Date(b.resetTime).toLocaleString() : '--'
+      });
+    });
+  });
+  return out;
+}
+function renderQuotas() {
+  // phone: stacked gauges
+  const body = document.getElementById('quota-body');
+  const buckets = quotaBuckets();
+  if (body) {
+    if (!statusData || !selectedQuotaAccount) {
+      body.innerHTML = '<div class="card-sub">No account selected.</div>';
+    } else if (!buckets) {
+      body.innerHTML = '<div class="card-sub">Offline. No telemetry yet for this account.</div>';
+    } else {
+      body.innerHTML = '';
+      buckets.forEach(b => {
+        const cls = b.pct > 50 ? 'ok' : (b.pct > 20 ? 'mid' : 'low');
+        const div = document.createElement('div');
+        div.className = 'gauge';
+        div.innerHTML =
+          '<div class="gauge-head"><span class="name">' + esc(b.name) +
+          '</span><span class="pct">' + b.pct + '%</span></div>' +
+          '<div class="gauge-track"><div class="gauge-fill ' + cls + '" style="width:' + b.pct + '%"></div></div>' +
+          '<div class="gauge-reset">Resets: ' + esc(b.reset) + '</div>';
+        body.appendChild(div);
+      });
+    }
+  }
+  // desktop: stat strip
+  const strip = document.querySelector('.js-quota-strip');
+  if (strip) {
+    if (!buckets) {
+      strip.innerHTML = '<div class="qstat"><div class="q-label">' +
+        (!statusData || !selectedQuotaAccount ? 'No account selected.' : 'Offline. No telemetry yet for this account.') +
+        '</div></div>';
+    } else {
+      strip.innerHTML = '';
+      buckets.forEach(b => {
+        const cls = b.pct > 50 ? 'ok' : (b.pct > 20 ? 'mid' : 'low');
+        const div = document.createElement('div');
+        div.className = 'qstat';
+        div.innerHTML =
+          '<div class="q-label ellip">' + esc(b.name) + '</div>' +
+          '<div class="q-val">' + b.pct + '<span class="q-unit">%</span></div>' +
+          '<div class="gauge-track"><div class="gauge-fill ' + cls + '" style="width:' + b.pct + '%"></div></div>' +
+          '<div class="q-reset">Resets ' + esc(b.reset) + '</div>';
+        strip.appendChild(div);
+      });
+    }
+  }
 }
 async function refreshAll() {
   try {
@@ -562,43 +759,83 @@ async function loadAccounts() {
     const res = await fetch('/api/accounts');
     const data = await res.json();
     const accs = data.accounts || [];
-    document.getElementById('acct-count').textContent = accs.length + ' active';
+    setText('.js-acct-count', accs.length + ' active');
+    // phone list
     const list = document.getElementById('acct-list');
-    list.innerHTML = '';
-    if (accs.length === 0) {
-      list.innerHTML = '<div class="card-sub">No accounts yet. Add one below.</div>';
-      return;
-    }
-    accs.forEach((a, idx) => {
-      const div = document.createElement('div');
-      div.className = 'acct';
-      let badges = '';
-      if (idx === 0) badges += '<span class="badge info">PRIMARY</span>';
-      if (a.isRateLimited) badges += '<span class="badge warn">COOLDOWN</span>';
-      if (a.needsValidation) badges += '<span class="badge warn">NEEDS VERIFICATION</span>';
-      if (a.tierStatus) badges += '<span class="badge off">TIER NOTICE</span>';
-      let meta = 'project: ' + esc(a.projectId || 'default');
-      if (a.isRateLimited && a.rateLimitedUntil) {
-        meta += ' &middot; until ' + new Date(a.rateLimitedUntil).toLocaleTimeString();
+    if (list) {
+      list.innerHTML = '';
+      if (accs.length === 0) {
+        list.innerHTML = '<div class="card-sub">No accounts yet. Add one below.</div>';
+      } else {
+        accs.forEach((a, idx) => {
+          const div = document.createElement('div');
+          div.className = 'acct';
+          let badges = '';
+          if (idx === 0) badges += '<span class="badge info">PRIMARY</span>';
+          if (a.isRateLimited) badges += '<span class="badge warn">COOLDOWN</span>';
+          if (a.needsValidation) badges += '<span class="badge warn">NEEDS VERIFICATION</span>';
+          if (a.tierStatus) badges += '<span class="badge off">TIER NOTICE</span>';
+          let meta = 'project: ' + esc(a.projectId || 'default');
+          if (a.isRateLimited && a.rateLimitedUntil) {
+            meta += ' &middot; until ' + new Date(a.rateLimitedUntil).toLocaleTimeString();
+          }
+          div.innerHTML =
+            '<div class="row">' +
+              '<div class="grow">' +
+                '<div class="acct-email ellip">' + esc(a.email) + '</div>' +
+                '<div class="acct-meta">' + meta + '</div>' +
+              '</div>' +
+              '<button class="btn small danger">Remove</button>' +
+            '</div>' +
+            (badges ? '<div class="acct-badges">' + badges + '</div>' : '') +
+            (a.tierStatus
+              ? '<div class="warn-banner">Google reported: ' + esc(a.tierStatus) + ' If this persists after restarting the gateway, set a GCP project ID in accounts.json.</div>'
+              : '') +
+            (a.needsValidation && a.validationUrl
+              ? '<div class="acct-meta" style="margin-top:6px"><a href="' + esc(a.validationUrl) + '" target="_blank" rel="noopener">Open verification link</a></div>'
+              : '');
+          div.querySelector('button').onclick = () => removeAccount(a.email);
+          list.appendChild(div);
+        });
       }
-      div.innerHTML =
-        '<div class="row">' +
-          '<div class="grow">' +
-            '<div class="acct-email ellip">' + esc(a.email) + '</div>' +
-            '<div class="acct-meta">' + meta + '</div>' +
-          '</div>' +
-          '<button class="btn small danger">Remove</button>' +
-        '</div>' +
-        (badges ? '<div class="acct-badges">' + badges + '</div>' : '') +
-        (a.tierStatus
-          ? '<div class="warn-banner">Google reported: ' + esc(a.tierStatus) + ' If this persists after restarting the gateway, set a GCP project ID in accounts.json.</div>'
-          : '') +
-        (a.needsValidation && a.validationUrl
-          ? '<div class="acct-meta" style="margin-top:6px"><a href="' + esc(a.validationUrl) + '" target="_blank" rel="noopener">Open verification link</a></div>'
-          : '');
-      div.querySelector('button').onclick = () => removeAccount(a.email);
-      list.appendChild(div);
-    });
+    }
+    // desktop table
+    const tbody = document.getElementById('acct-table-body');
+    if (tbody) {
+      tbody.innerHTML = '';
+      if (accs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="color:var(--text-muted);font-size:12.5px">No accounts yet. Add one below.</td></tr>';
+      } else {
+        accs.forEach((a, idx) => {
+          const tr = document.createElement('tr');
+          let badges = '';
+          if (idx === 0) badges += '<span class="badge info">PRIMARY</span>';
+          if (a.needsValidation) badges += '<span class="badge warn">NEEDS VERIFICATION</span>';
+          if (a.tierStatus) badges += '<span class="badge off">TIER NOTICE</span>';
+          let cd = '<span style="color:var(--text-muted)">--</span>';
+          if (a.isRateLimited) {
+            cd = '<span class="badge warn">COOLDOWN</span>' +
+              (a.rateLimitedUntil ? ' <span style="color:var(--text-muted);font-size:12px">until ' +
+                new Date(a.rateLimitedUntil).toLocaleTimeString() + '</span>' : '');
+          }
+          tr.innerHTML =
+            '<td><span class="a-email">' + esc(a.email) + '</span>' +
+              (badges ? '<span class="a-badges">' + badges + '</span>' : '') +
+              (a.needsValidation && a.validationUrl
+                ? '<div style="margin-top:3px"><a href="' + esc(a.validationUrl) + '" target="_blank" rel="noopener" style="font-size:12px">Open verification link</a></div>'
+                : '') +
+              (a.tierStatus
+                ? '<div class="warn-banner" style="margin-top:6px">Google reported: ' + esc(a.tierStatus) + ' If this persists after restarting the gateway, set a GCP project ID in accounts.json.</div>'
+                : '') +
+            '</td>' +
+            '<td class="a-proj">' + esc(a.projectId || 'default') + '</td>' +
+            '<td>' + cd + '</td>' +
+            '<td class="a-act"><button class="linkbtn">Remove</button></td>';
+          tr.querySelector('button').onclick = () => removeAccount(a.email);
+          tbody.appendChild(tr);
+        });
+      }
+    }
   } catch (e) { /* keep last */ }
 }
 async function removeAccount(email) {
@@ -612,9 +849,11 @@ async function removeAccount(email) {
     loadAccounts(); loadStatus();
   } catch (e) { showToast('Remove failed'); }
 }
-async function addAccount() {
-  const token = document.getElementById('add-token').value.trim();
-  const email = document.getElementById('add-email').value.trim();
+async function addAccount(desktop) {
+  const tokenEl = document.getElementById(desktop ? 'd-add-token' : 'add-token');
+  const emailEl = document.getElementById(desktop ? 'd-add-email' : 'add-email');
+  const token = tokenEl.value.trim();
+  const email = emailEl.value.trim();
   if (!token) { showToast('Refresh token required'); return; }
   try {
     const res = await fetch('/api/accounts/add', {
@@ -622,8 +861,8 @@ async function addAccount() {
       body: JSON.stringify({ email, refreshToken: token, projectId: 'default' })
     });
     if (!res.ok) throw new Error(await res.text());
-    document.getElementById('add-token').value = '';
-    document.getElementById('add-email').value = '';
+    tokenEl.value = '';
+    emailEl.value = '';
     showToast('Account added');
     loadAccounts(); loadStatus();
   } catch (e) { showToast('Add failed: ' + e.message.slice(0, 80)); }
@@ -639,46 +878,38 @@ async function loadLogs() {
     const res = await fetch('/api/logs');
     const data = await res.json();
     let logs = (data.logs || []).slice(0, 50);
-    // After a manual Clear, show only entries newer than the clear point
-    // (the API returns newest-first, so new entries are the overflow count).
     if (clearedBaseline > 0) {
       const fresh = Math.max(0, logs.length - clearedBaseline);
       logs = logs.slice(0, fresh);
       clearedBaseline = Math.min(clearedBaseline, (data.logs || []).length);
     }
     lastLogs = logs;
-    const body = document.getElementById('log-body');
-    if (logs.length === 0) {
-      body.innerHTML = '<div class="card-sub">AntiAPI server console initialized. Waiting for requests...</div>';
-      return;
-    }
-    body.innerHTML = '';
-    logs.forEach(l => {
-      const div = document.createElement('div');
-      div.className = 'log-line';
-      const ok = l.status >= 200 && l.status < 400;
-      div.innerHTML =
-        '<span class="log-status ' + (ok ? 'ok' : 'err') + '">' + l.status + '</span>' +
-        '<span class="log-path ellip">' + esc(l.method) + ' ' + esc(l.path) + '</span>' +
-        '<span class="log-time">' + esc(l.duration || '') + '</span>';
-      body.appendChild(div);
+    document.querySelectorAll('.js-log-body').forEach(body => {
+      if (logs.length === 0) {
+        body.innerHTML = '<div class="card-sub">AntiAPI server console initialized. Waiting for requests...</div>';
+        return;
+      }
+      body.innerHTML = '';
+      logs.forEach(l => {
+        const div = document.createElement('div');
+        div.className = 'log-line';
+        const ok = l.status >= 200 && l.status < 400;
+        div.innerHTML =
+          '<span class="log-status ' + (ok ? 'ok' : 'err') + '">' + l.status + '</span>' +
+          '<span class="log-path ellip">' + esc(l.method) + ' ' + esc(l.path) + '</span>' +
+          '<span class="log-time">' + esc(l.duration || '') + '</span>';
+        body.appendChild(div);
+      });
     });
   } catch (e) { /* keep last */ }
 }
-function selectTab(name) {
-  document.querySelectorAll('main > section').forEach(sec => sec.classList.toggle('active', sec.dataset.tab === name));
-  document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
-  if (('#' + name) !== location.hash) history.replaceState(null, '', '#' + name);
-}
-(function () {
-  const initial = (location.hash || '').replace('#', '');
-  if (['gateway', 'quotas', 'console'].includes(initial)) selectTab(initial);
-})();
 
 let clearedBaseline = 0;
 function clearLogs() {
   clearedBaseline = lastLogs.length;
-  document.getElementById('log-body').innerHTML = '<div class="card-sub">Console cleared.</div>';
+  document.querySelectorAll('.js-log-body').forEach(body => {
+    body.innerHTML = '<div class="card-sub">Console cleared.</div>';
+  });
 }
 function copyLogs() {
   const text = lastLogs.map(l => l.status + ' ' + l.method + ' ' + l.path + ' ' + (l.duration || '')).join('\n');
